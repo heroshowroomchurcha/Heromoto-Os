@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS public.sales (
   exchange_value numeric default 0,
   emi_amount numeric,
   tenure_months integer,
+  amount_paid numeric default 0,
   signature_data text,
   invoice_number text,
   rc_photo_path text,

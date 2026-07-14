@@ -172,6 +172,7 @@ where not exists (
 
 alter table if exists public.sales add column if not exists emi_amount numeric;
 alter table if exists public.sales add column if not exists tenure_months integer;
+alter table if exists public.sales add column if not exists amount_paid numeric default 0;
 
 -- Pending dues table for standalone udhaar
 create table if not exists public.pending_dues (
