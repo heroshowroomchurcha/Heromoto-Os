@@ -169,3 +169,6 @@ from public.sales s
 where not exists (
   select 1 from public.rc_records r where r.sale_id = s.id
 );
+
+alter table if exists public.sales add column if not exists emi_amount numeric;
+alter table if exists public.sales add column if not exists tenure_months integer;
