@@ -69,6 +69,16 @@ async function uploadSaleDocument(file, saleId, kind, userId) {
   return path;
 }
 
+async function uploadVehicleImage(file, vehicleId) {
+  if (!file) return null;
+  const safeName = file.name.toLowerCase().replace(/[^a-z0-9.-]+/g, '-');
+  const path = `${vehicleId}/${Date.now()}-${safeName}`;
+  const { error } = await supabase.storage.from('vehicle-images').upload(path, file, { upsert: false, contentType: file.type || 'image/jpeg' });
+  if (error) throw error;
+  const { data: { publicUrl } } = supabase.storage.from('vehicle-images').getPublicUrl(path);
+  return publicUrl;
+}
+
 function AuthScreen() {
   const [mode, setMode] = useState('signin');
   const [email, setEmail] = useState('');
@@ -83,7 +93,7 @@ function AuthScreen() {
     else setMessage(mode === 'signin' ? 'Welcome back.' : 'Account created. Check your email if confirmation is enabled.');
     setBusy(false);
   }
-  return <div className="auth-screen"><div className="auth-panel"><div className="auth-brand"><span>R</span><div><b>rideflow</b><small>SHOWROOM OS</small></div></div><p className="eyebrow">SECURE SHOWROOM LOGIN</p><h1>{mode === 'signin' ? 'Welcome back.' : 'Create staff access.'}</h1><p className="auth-copy">Sign in to manage sales, inventory and customer follow-ups.</p><form onSubmit={submit}>{mode === 'signup' && <label>Full name<input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="e.g. Aamir Khan" required/></label>}<label>Email address<input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="staff@showroom.com" required/></label><label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Minimum 6 characters" minLength="6" required/></label><button className="primary-button auth-submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'signin' ? 'Sign in to RideFlow' : 'Create account'}</button></form>{message && <p className="auth-message">{message}</p>}<button className="auth-switch" onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setMessage(''); }}>{mode === 'signin' ? 'Need staff access? Create an account' : 'Already have an account? Sign in'}</button></div><div className="auth-side"><span className="auth-side-mark">R</span><p>One clean workspace for every ride sold, every RC updated, every customer remembered.</p><small>Hero MotoCorp · Andheri</small></div></div>;
+  return <div className="auth-screen"><div className="auth-panel"><div className="auth-brand"><span>R</span><div><b>rideflow</b><small>SHOWROOM OS</small></div></div><p className="eyebrow">SECURE SHOWROOM LOGIN</p><h1>{mode === 'signin' ? 'Welcome back.' : 'Create staff access.'}</h1><p className="auth-copy">Sign in to manage sales, inventory and customer follow-ups.</p><form onSubmit={submit}>{mode === 'signup' && <label>Full name<input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="e.g. Aamir Khan" required/></label>}<label>Email address<input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="staff@showroom.com" required/></label><label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Minimum 6 characters" minLength="6" required/></label><button className="primary-button auth-submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'signin' ? 'Sign in to RideFlow' : 'Create account'}</button></form>{message && <p className="auth-message">{message}</p>}<button className="auth-switch" onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setMessage(''); }}>{mode === 'signin' ? 'Need staff access? Create an account' : 'Already have an account? Sign in'}</button></div><div className="auth-side" style={{backgroundImage: 'url(/showroom-bg.png)', backgroundSize: 'cover', backgroundPosition: 'center right'}}><div style={{position:'absolute',inset:0,background:'linear-gradient(135deg, rgba(15,15,15,0.82) 0%, rgba(25,25,25,0.55) 60%, rgba(10,10,10,0.7) 100%)'}} /><span className="auth-side-mark" style={{position:'relative', zIndex:1}}>R</span><p style={{position:'relative', zIndex:1}}>One clean workspace for every ride sold, every RC updated, every customer remembered.</p><small style={{position:'relative', zIndex:1}}>Hero MotoCorp · Andheri</small></div></div>;
 }
 
 function App() {
@@ -104,7 +114,6 @@ function App() {
   const [selectedModel, setSelectedModel] = useState(null);
   const [invoiceSale, setInvoiceSale] = useState(null);
   const [toast, setToast] = useState('');
-  const nav = [{ label: 'Overview', icon: 'grid' }, { label: 'Inventory', icon: 'bike' }, { label: 'Sales', icon: 'tag', count: sales.length }, { label: 'Test drives', icon: 'key', count: testDrives.filter(t => t.status !== 'Completed').length || '06' }, { label: 'Test ride inventory', icon: 'box', count: testDriveInventory.length }, { label: 'Number plate', icon: 'file', count: '08' }, { label: 'Customers', icon: 'users', count: customers.length || undefined }, { label: 'Pending dues', icon: 'file', count: pendingDues.filter(d => d.status === 'Pending').length || undefined }, { label: 'EMI calculator', icon: 'calc' }];
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 60000);
@@ -159,13 +168,6 @@ function App() {
         if (customerRows) setCustomers(customerRows);
         if (duesRows) setPendingDues(duesRows);
       }
-      
-      // Temporary cleanup for duplicate Arjun Mehta records
-      if (session?.user?.id) {
-        supabase.from('rc_records').delete().in('sale_id', [1, 2, 3]).then(() => {
-          console.log('Cleanup of demo RC records complete');
-        });
-      }
     }
     load();
     return () => { mounted = false; };
@@ -174,16 +176,43 @@ function App() {
   const filteredInventory = useMemo(() => inventory.filter(v => `${v.model} ${v.variant} ${v.color}`.toLowerCase().includes(query.toLowerCase())), [inventory, query]);
   const monthlySales = sales.reduce((sum, sale) => sum + Number(sale.sale_amount || 0), 0);
   const stockTotal = inventory.reduce((sum, v) => sum + Number(v.stock || 0), 0);
-  const visibleCustomers = customers.length ? customers : sales.map(sale => ({ id: `sale-${sale.id}`, name: sale.customer_name, phone: sale.customer_phone, created_at: sale.sale_date, last_vehicle: sale.vehicle_name, last_amount: sale.sale_amount }));
-  const visibleRcRecords = useMemo(() => {
-    const linkedSaleIds = new Set(rcRecords.map(record => String(record.sale_id)));
-    const missingRcRows = sales
-      .filter(sale => !linkedSaleIds.has(String(sale.id)))
-      .map(sale => ({ id: `pending-rc-${sale.id}`, sale_id: sale.id, customer_name: sale.customer_name, customer_phone: sale.customer_phone, vehicle_name: sale.vehicle_name, status: 'Pending', created_at: sale.sale_date }));
-    return [...rcRecords, ...missingRcRows];
-  }, [rcRecords, sales]);
+  const visibleCustomers = useMemo(() => {
+    const map = new Map();
+    customers.forEach(c => {
+      const key = `${(c.name || '').toLowerCase().replace(/\s+/g, '')}-${(c.phone || '').replace(/\s+/g, '')}`;
+      map.set(key, { ...c, last_vehicle: null, last_amount: null });
+    });
+    sales.forEach(sale => {
+      const key = `${(sale.customer_name || '').toLowerCase().replace(/\s+/g, '')}-${(sale.customer_phone || '').replace(/\s+/g, '')}`;
+      const existing = map.get(key);
+      if (existing) {
+        if (!existing.last_vehicle) {
+          existing.last_vehicle = sale.vehicle_name;
+          existing.last_amount = sale.sale_amount;
+        }
+      } else {
+        map.set(key, {
+          id: `sale-${sale.id}`,
+          name: sale.customer_name,
+          phone: sale.customer_phone,
+          created_at: sale.sale_date,
+          last_vehicle: sale.vehicle_name,
+          last_amount: sale.sale_amount
+        });
+      }
+    });
+    return Array.from(map.values())
+      .filter(c => c.last_vehicle)
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  }, [customers, sales]);
+  const visibleRcRecords = useMemo(() => rcRecords.length ? rcRecords : sales.filter(s => s.payment_status === 'Paid')
+      .map(sale => ({ id: `pending-rc-${sale.id}`, sale_id: sale.id, customer_name: sale.customer_name, customer_phone: sale.customer_phone, vehicle_name: sale.vehicle_name, status: 'Pending', created_at: sale.sale_date })), [rcRecords, sales]);
 
-
+  const filteredSales = useMemo(() => sales.filter(s => `${s.customer_name} ${s.vehicle_name} ${s.sale_type}`.toLowerCase().includes(query.toLowerCase())), [sales, query]);
+  const filteredTestDrives = useMemo(() => testDrives.filter(d => `${d.customer_name} ${d.vehicle_name}`.toLowerCase().includes(query.toLowerCase())), [testDrives, query]);
+  const filteredRcRecords = useMemo(() => visibleRcRecords.filter(r => `${r.customer_name} ${r.vehicle_name}`.toLowerCase().includes(query.toLowerCase())), [visibleRcRecords, query]);
+  const filteredVisibleCustomers = useMemo(() => visibleCustomers.filter(c => `${c.name} ${c.phone} ${c.last_vehicle}`.toLowerCase().includes(query.toLowerCase())), [visibleCustomers, query]);
+  const filteredPendingDues = useMemo(() => pendingDues.filter(d => `${d.customer_name} ${d.customer_phone}`.toLowerCase().includes(query.toLowerCase())), [pendingDues, query]);
 
   async function completeSale(form) {
     const vehicle = selectedVehicle;
@@ -206,7 +235,7 @@ function App() {
         setToast(`Sale save ho rahi hai, lekin document upload fail hua: ${documentError.message}`);
       }
     }
-    const sale = { customer_id: customerRow?.id || null, customer_name: form.customer, customer_phone: form.phone, vehicle_id: vehicle.id, vehicle_name: `${vehicle.model} ${vehicle.variant || ''}`.trim(), original_price: vehicle.on_road_price || vehicle.ex_showroom_price, discount, sale_amount: saleAmount, payment_status: form.payment, signature_data: form.signature || null, sale_type: form.saleType || 'Sale', old_vehicle_name: form.oldVehicleName || '', old_vehicle_registration: form.oldVehicleRegistration || '', exchange_value: exchangeValue, exchange_discount: exchangeDiscount, emi_amount: form.emiAmount ? Number(form.emiAmount) : null, tenure_months: form.tenureMonths ? Number(form.tenureMonths) : null, amount_paid: form.amountPaid };
+    const sale = { customer_id: customerRow?.id || null, customer_name: form.customer, customer_phone: form.phone, vehicle_id: vehicle.id, vehicle_name: `${vehicle.model} ${vehicle.variant || ''}`.trim(), vehicle_color: form.vehicleColor || vehicle.color, original_price: vehicle.on_road_price || vehicle.ex_showroom_price, discount, sale_amount: saleAmount, payment_status: form.payment, signature_data: form.signature || null, sale_type: form.saleType || 'Sale', old_vehicle_name: form.oldVehicleName || '', old_vehicle_registration: form.oldVehicleRegistration || '', exchange_value: exchangeValue, exchange_discount: exchangeDiscount, emi_amount: form.emiAmount ? Number(form.emiAmount) : null, tenure_months: form.tenureMonths ? Number(form.tenureMonths) : null, amount_paid: form.amountPaid };
     const { data, error } = await supabase.from('sales').insert(sale).select().single();
     if (error) {
       setToast('Sale save nahi hui — pehle Supabase SQL tables/RLS check karo.');
@@ -223,11 +252,18 @@ function App() {
       }
     }
     const { data: rcRow } = await supabase.from('rc_records').insert({ sale_id: linkedSale.id, customer_name: form.customer, customer_phone: form.phone, vehicle_name: sale.vehicle_name, status: 'Pending' }).select().single();
-    await supabase.from('inventory').update({ stock: Math.max(0, vehicle.stock - 1), status: vehicle.stock - 1 <= 0 ? 'Sold out' : 'Available' }).eq('id', vehicle.id);
+    let newStock = Math.max(0, vehicle.stock - 1);
+    let newStockByColor = vehicle.stock_by_color || [];
+    if (newStockByColor.length > 0 && form.vehicleColor) {
+      newStockByColor = newStockByColor.map(item => item.color === form.vehicleColor ? { ...item, qty: Math.max(0, Number(item.qty) - 1) } : item);
+      newStock = newStockByColor.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+    }
+    
+    await supabase.from('inventory').update({ stock: newStock, stock_by_color: newStockByColor, status: newStock <= 0 ? 'Sold out' : 'Available' }).eq('id', vehicle.id);
     setSales(current => [linkedSale, ...current]);
     setCustomers(current => [customerRow || { id: `local-${Date.now()}`, name: form.customer, phone: form.phone, ...kyc, created_at: new Date().toISOString(), last_vehicle: sale.vehicle_name, last_amount: saleAmount }, ...current]);
     setRcRecords(current => [rcRow || { id: Date.now(), sale_id: linkedSale.id, customer_name: form.customer, vehicle_name: sale.vehicle_name, status: 'Pending', created_at: new Date().toISOString() }, ...current]);
-    setInventory(current => current.map(item => item.id === vehicle.id ? { ...item, stock: Math.max(0, item.stock - 1) } : item));
+    setInventory(current => current.map(item => item.id === vehicle.id ? { ...item, stock: newStock, stock_by_color: newStockByColor } : item));
     setSelectedVehicle(null);
     setActive('Overview');
     setInvoiceSale({ sale: { ...linkedSale, sale_date: linkedSale.sale_date || new Date().toISOString() }, vehicle, customer: { name: form.customer, phone: form.phone, ...kyc, ...documentPaths }, saleAmount, discount, signature: form.signature });
@@ -271,11 +307,42 @@ function App() {
   if (session === undefined) return <div className="auth-loading"/>;
   if (!session) return <AuthScreen />;
   const isOwner = profile?.role === 'owner';
-  // Staff can view the RC tracker; only RC status writes remain owner-protected by RLS.
+  const nav = [{ label: 'Overview', icon: 'grid' }, { label: 'Inventory', icon: 'bike' }, { label: 'Sales', icon: 'tag', count: sales.length || undefined }, { label: 'Test drives', icon: 'key', count: testDrives.filter(t => t.status !== 'Completed').length || undefined }, { label: 'Number plate', icon: 'file', count: rcRecords.filter(r => r.status !== 'Completed').length || undefined }, { label: 'Customers', icon: 'users', count: visibleCustomers?.length || undefined }, { label: 'Pending dues', icon: 'file', count: pendingDues.filter(d => d.status === 'Pending').length || undefined }, { label: 'EMI calculator', icon: 'calc' }];
   const visibleNav = nav;
   return <div className="app-shell"><aside className="sidebar"><div className="brand"><div className="brand-mark">R</div><div><strong>rideflow</strong><span>SHOWROOM OS</span></div></div><div className="branch-select"><span className="online-dot"/> Hero MotoCorp <b>·</b> Andheri <Icon name="arrow" size={13}/></div><nav>{visibleNav.map(item => <button key={item.label} className={active === item.label ? 'nav-item active' : 'nav-item'} onClick={() => setActive(item.label)}><Icon name={item.icon}/><span>{item.label}</span>{item.count && <em>{item.count}</em>}</button>)}</nav><div className="sidebar-bottom"><div className="sync"><span className="pulse"/><div><b>Supabase synced</b><small>{isOwner ? 'Owner access · Secure' : 'Staff access · Limited'}</small></div></div><button className="user-row" onClick={() => supabase.auth.signOut()}><div className="avatar me">{(profile?.full_name || session.user.email || 'NK').slice(0,2).toUpperCase()}</div><div><b>{profile?.full_name || session.user.email}</b><small>{isOwner ? 'Showroom owner' : 'Showroom staff'} · Sign out</small></div><Icon name="dots" size={16}/></button></div></aside>
     <main className="main-content"><header className="topbar"><div className="breadcrumb"><div className="mobile-brand"><div className="brand-mark">R</div><strong>rideflow</strong></div></div><div className="top-actions"><label className="search"><Icon name="search" size={17}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search vehicles, customers..."/></label><button className="icon-button" onClick={() => { setToast('No new notifications'); setTimeout(() => setToast(''), 3000); }}><Icon name="bell"/></button><button className="primary-button" onClick={() => setActive('Inventory')}><Icon name="plus" size={17}/> New sale</button></div></header><div className="content-wrap"><section className="page-heading"><div><p className="eyebrow">{dashboardDateLabel(clock)} <span className="live"><i/> LIVE</span></p><h1>{active === 'Overview' ? `${greetingForHour(clock.getHours())}, Nihal.` : active}</h1><p className="subcopy">{active === 'Overview' ? 'Your showroom numbers, inventory and follow-ups in one view.' : active === 'Inventory' ? 'Show customers every available bike, price and offer limit.' : `Manage your ${active.toLowerCase()} records from one place.`}</p></div><button className="date-button"><Icon name="calendar" size={16}/> Supabase live <span className="live-dot"/></button></section>
-      {active === 'Overview' ? <Overview sales={sales} inventory={inventory} monthlySales={monthlySales} stockTotal={stockTotal} setActive={setActive} onDownloadBackup={downloadBackup} /> : active === 'Inventory' ? selectedModel ? <VehicleDetail vehicle={selectedModel} onBack={() => setSelectedModel(null)} onSell={() => setSelectedVehicle(selectedModel)} /> : <Inventory vehicles={filteredInventory} onSell={setSelectedVehicle} onDetails={setSelectedModel} onManage={() => setActive('Inventory management')} /> : active === 'Test drives' ? <TestDrives drives={testDrives} vehicles={testDriveInventory} onAdd={() => setShowTestDriveModal(true)} onStatusChange={async (drive, status) => { const { error } = await supabase.from('test_drives').update({ status }).eq('id', drive.id); if (!error) { setTestDrives(current => current.map(item => item.id === drive.id ? { ...item, status } : item)); setToast(`Test drive status updated: ${status}`); setTimeout(() => setToast(''), 4000); } }} /> : active === 'Number plate' ? <RCTracker records={visibleRcRecords} onStatusChange={async (record, status) => { if (String(record.id).startsWith('sale-rc-')) { setToast('Is sale ka RC Supabase mein create karne ke liye setup.sql policies run karo.'); setTimeout(() => setToast(''), 4000); return; } const { error } = await supabase.from('rc_records').update({ status, ...(status === 'Completed' ? { completed_at: new Date().toISOString() } : {}) }).eq('id', record.id); if (!error) { setRcRecords(current => current.map(item => item.id === record.id ? { ...item, status } : item)); setToast(`RC status updated: ${status}`); sendCustomerSms({ kind: 'rc_status', phone: record.customer_phone, customerName: record.customer_name, orderId: record.sale_id, rcStatus: status }).then(sent => { if (sent) setToast(`RC ${status} update sent to ${record.customer_name}.`); }); setTimeout(() => setToast(''), 5000); } }} /> : active === 'Customers' ? <Customers records={visibleCustomers} /> : active === 'Sales' ? <SalesWorkspace sales={sales} userId={session.user.id} onChange={setSales} onToast={setToast} /> : active === 'Test ride inventory' ? <TestRideInventoryWorkspace vehicles={testDriveInventory} onChange={setTestDriveInventory} onToast={setToast} /> : active === 'EMI calculator' ? <EMIWorkspace defaultAmount={inventory[0]?.on_road_price || 100000} /> : active === 'Pending dues' ? <PendingDuesWorkspace dues={pendingDues} onChange={setPendingDues} onToast={setToast} /> : <section className="placeholder-panel panel"><div className="empty-icon"><Icon name="chart" size={27}/></div><h2>{active} workspace ready</h2><p>Database connected. Is module ka next workflow yahan manage hoga.</p><button className="primary-button" onClick={() => setActive('Inventory')}><Icon name="bike" size={17}/> Open inventory</button></section>}
+      {active === 'Overview' ? <Overview sales={filteredSales} inventory={inventory} monthlySales={monthlySales} stockTotal={stockTotal} rcRecords={filteredRcRecords} setActive={setActive} onDownloadBackup={downloadBackup} />
+      : active === 'Inventory' ? selectedModel ? <VehicleDetail vehicle={selectedModel} onBack={() => setSelectedModel(null)} onSell={() => setSelectedVehicle(selectedModel)} /> : <Inventory vehicles={filteredInventory} onSell={setSelectedVehicle} onDetails={setSelectedModel} onManage={() => setActive('Inventory management')} />
+      : active === 'Test drives' ? <TestDrivesWorkspace drives={filteredTestDrives} vehicles={testDriveInventory} onAdd={() => setShowTestDriveModal(true)} onStatusChange={async (drive, status) => {
+          const { error } = await supabase.from('test_drives').update({ status }).eq('id', drive.id);
+          if (!error) {
+            setTestDrives(current => current.map(item => item.id === drive.id ? { ...item, status } : item));
+            setToast(`Test drive status updated: ${status}`);
+            setTimeout(() => setToast(''), 4000);
+          }
+        }} onInventoryChange={setTestDriveInventory} onToast={setToast} />
+      : active === 'Number plate' ? <RCTracker records={filteredRcRecords} onStatusChange={async (record, status) => {
+          if (String(record.id).startsWith('sale-rc-')) {
+            setToast('Is sale ka RC Supabase mein create karne ke liye setup.sql policies run karo.');
+            setTimeout(() => setToast(''), 4000);
+            return;
+          }
+          const { error } = await supabase.from('rc_records').update({ status, ...(status === 'Completed' ? { completed_at: new Date().toISOString() } : {}) }).eq('id', record.id);
+          if (!error) {
+            setRcRecords(current => current.map(item => item.id === record.id ? { ...item, status } : item));
+            setToast(`RC status updated: ${status}`);
+            sendCustomerSms({ kind: 'rc_status', phone: record.customer_phone, customerName: record.customer_name, orderId: record.sale_id, rcStatus: status }).then(sent => {
+              if (sent) setToast(`RC ${status} update sent to ${record.customer_name}.`);
+            });
+            setTimeout(() => setToast(''), 5000);
+          }
+        }} />
+      : active === 'Customers' ? <Customers records={filteredVisibleCustomers} drives={filteredTestDrives} />
+      : active === 'Sales' ? <SalesWorkspace sales={filteredSales} userId={session.user.id} onChange={setSales} onToast={setToast} />
+      : active === 'Test ride inventory' ? <TestRideInventoryWorkspace vehicles={testDriveInventory} onChange={setTestDriveInventory} onToast={setToast} />
+      : active === 'EMI calculator' ? <EMIWorkspace defaultAmount={inventory[0]?.on_road_price || 100000} />
+      : active === 'Pending dues' ? <PendingDuesWorkspace dues={filteredPendingDues} onChange={setPendingDues} onToast={setToast} />
+      : active === 'Inventory management' ? <InventoryManagementWorkspace inventory={filteredInventory} onChange={setInventory} onToast={setToast} /> : <section className="placeholder-panel panel"><div className="empty-icon"><Icon name="chart" size={27}/></div><h2>{active} workspace ready</h2><p>Database connected. Is module ka next workflow yahan manage hoga.</p><button className="primary-button" onClick={() => setActive('Inventory')}><Icon name="bike" size={17}/> Open inventory</button></section>}
     </div></main>
     {selectedVehicle && <SaleModal vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} onSave={completeSale} />}
     {invoiceSale && <InvoiceModal record={invoiceSale} onClose={() => setInvoiceSale(null)} />}
@@ -284,8 +351,9 @@ function App() {
   </div>;
 }
 
-function Overview({ sales, inventory, monthlySales, stockTotal, setActive, onDownloadBackup }) {
-  return <><section className="metrics"><Metric label="MONTHLY SALES" value={money(monthlySales)} delta="LIVE" foot="from connected sales" accent="red"/><Metric label="UNITS SOLD" value={sales.length} delta="SYNCED" foot="sales records"/><Metric label="AVAILABLE STOCK" value={stockTotal} delta="LIVE" foot="bikes in inventory"/><Metric label="NUMBER PLATE PENDING" value="08" delta="3 due today" foot="needs attention" accent="amber"/></section><section className="workspace-grid"><div className="panel sales-panel"><div className="panel-head"><div><p className="eyebrow">CONNECTED DATA</p><h2>Latest sales</h2></div><button className="text-button" onClick={() => setActive('Sales')}>View all <Icon name="arrow" size={15}/></button></div><div className="table-head"><span>Customer</span><span>Vehicle</span><span>Sale value</span><span>Updated</span><span>Status</span><span></span></div>{sales.slice(0, 5).map((s, i) => <div className="sale-row" key={s.id || i}><div className="customer"><div className="avatar" style={{background:['#e8d4ce','#dce3d3','#d9dcea','#e8e0cc'][i % 4]}}>{String(s.customer_name || 'NK').split(' ').map(x => x[0]).join('').slice(0,2)}</div><b>{s.customer_name}</b></div><span className="vehicle-highlight"><b>{s.vehicle_name || 'Vehicle not added'}</b></span><b>{money(s.sale_amount)}</b><span className="muted">{dateLabel(s.sale_date)}</span><span className={s.sale_type === 'Return' ? 'status danger' : s.sale_type === 'Exchange' ? 'status info' : s.payment_status === 'Paid' ? 'status success' : 'status warning'}><i/>{s.sale_type || (s.payment_status === 'Paid' ? 'Paid' : 'Number plate pending')}</span><button className="row-dots" title="Open sales actions" aria-label={`Open actions for ${s.vehicle_name || 'sale'}`} onClick={() => setActive('Sales')}><Icon name="dots" size={16}/></button></div>)}</div><div className="side-stack"><div className="panel follow-panel"><div className="panel-head"><div><p className="eyebrow">INVENTORY SIGNAL</p><h2>Stock watch</h2></div><span className="count-badge">{inventory.filter(v => v.stock <= 2).length}</span></div><div className="follow-list">{inventory.filter(v => v.stock <= 2).map(v => <div className="follow-item" key={v.id}><div className="avatar small">{v.model.slice(0,2).toUpperCase()}</div><div className="follow-copy"><b>{v.model}</b><span>{v.variant} · {v.stock} left</span></div><div className="follow-tag today">Low stock</div></div>)}</div><button className="outline-button" onClick={() => setActive('Inventory')}>Open inventory <Icon name="arrow" size={15}/></button></div><div className="panel quick-panel"><div className="quick-glyph"><Icon name="bike" size={20}/></div><div><p className="eyebrow">INVENTORY VALUE</p><h2>{money(inventory.reduce((sum, v) => sum + (v.on_road_price || 0) * (v.stock || 0), 0))}</h2><span>{stockTotal} units currently available</span></div></div><div className="panel quick-panel" style={{cursor: 'pointer'}} onClick={onDownloadBackup}><div className="quick-glyph" style={{background: '#e2efe1', color: '#528d5f'}}><Icon name="file" size={20}/></div><div><p className="eyebrow">DATA EXPORT</p><h2 style={{fontSize: '18px', fontWeight: '600', letterSpacing: '-0.02em', margin: '4px 0 2px'}}>Download Backup</h2><span style={{fontSize: '13px', color: '#657487'}}>Export sales, customers & dues as CSV</span></div></div></div></section></>;
+function Overview({ sales, inventory, monthlySales, stockTotal, rcRecords, setActive, onDownloadBackup }) {
+  const pendingRcCount = rcRecords?.filter(r => r.status !== 'Completed').length || 0;
+  return <><section className="metrics"><Metric label="MONTHLY SALES" value={money(monthlySales)} delta="LIVE" foot="this month" accent="red"/><Metric label="UNITS SOLD" value={sales.length} delta="SYNCED" foot="sales records"/><Metric label="AVAILABLE STOCK" value={stockTotal} delta="LIVE" foot="bikes in inventory"/><Metric label="NUMBER PLATE PENDING" value={pendingRcCount.toString().padStart(2, '0')} delta={`${pendingRcCount} pending`} foot="needs attention" accent="amber"/></section><section className="workspace-grid"><div className="panel sales-panel"><div className="panel-head"><div><p className="eyebrow">CONNECTED DATA</p><h2>Latest sales</h2></div><button className="text-button" onClick={() => setActive('Sales')}>View all <Icon name="arrow" size={15}/></button></div><div className="table-head"><span>Customer</span><span>Vehicle</span><span>Sale value</span><span>Updated</span><span>Status</span><span></span></div>{sales.slice(0, 5).map((s, i) => <div className="sale-row" key={s.id || i}><div className="customer"><div className="avatar" style={{background:['#e8d4ce','#dce3d3','#d9dcea','#e8e0cc'][i % 4]}}>{String(s.customer_name || 'NK').split(' ').map(x => x[0]).join('').slice(0,2)}</div><b>{s.customer_name}</b></div><span className="vehicle-highlight"><b>{s.vehicle_name || 'Vehicle not added'}</b></span><b>{money(s.sale_amount)}</b><span className="muted">{dateLabel(s.sale_date)}</span><span className={s.sale_type === 'Return' ? 'status danger' : s.sale_type === 'Exchange' ? 'status info' : s.payment_status === 'Paid' ? 'status success' : 'status warning'}><i/>{s.sale_type || (s.payment_status === 'Paid' ? 'Paid' : 'Number plate pending')}</span><button className="row-dots" title="Open sales actions" aria-label={`Open actions for ${s.vehicle_name || 'sale'}`} onClick={() => setActive('Sales')}><Icon name="dots" size={16}/></button></div>)}</div><div className="side-stack"><div className="panel follow-panel"><div className="panel-head"><div><p className="eyebrow">INVENTORY SIGNAL</p><h2>Stock watch</h2></div><span className="count-badge">{inventory.filter(v => v.stock <= 2).length}</span></div><div className="follow-list">{inventory.filter(v => v.stock <= 2).map(v => <div className="follow-item" key={v.id}><div className="avatar small">{v.model.slice(0,2).toUpperCase()}</div><div className="follow-copy"><b>{v.model}</b><span>{v.variant} · {v.stock} left</span></div><div className="follow-tag today">Low stock</div></div>)}</div><button className="outline-button" onClick={() => setActive('Inventory')}>Open inventory <Icon name="arrow" size={15}/></button></div><div className="panel quick-panel"><div className="quick-glyph"><Icon name="bike" size={20}/></div><div><p className="eyebrow">INVENTORY VALUE</p><h2>{money(inventory.reduce((sum, v) => sum + (v.on_road_price || 0) * (v.stock || 0), 0))}</h2><span>{stockTotal} units currently available</span></div></div><div className="panel quick-panel" style={{cursor: 'pointer'}} onClick={onDownloadBackup}><div className="quick-glyph" style={{background: '#e2efe1', color: '#528d5f'}}><Icon name="file" size={20}/></div><div><p className="eyebrow">DATA EXPORT</p><h2 style={{fontSize: '18px', fontWeight: '600', letterSpacing: '-0.02em', margin: '4px 0 2px'}}>Download Backup</h2><span style={{fontSize: '13px', color: '#657487'}}>Export sales, customers & dues as CSV</span></div></div></div></section></>;
 }
 
 function EMICalculator({ defaultAmount }) {
@@ -303,21 +371,66 @@ function Inventory({ vehicles, onSell, onDetails, onManage }) {
   const getCc = vehicle => Number(vehicle.cc || ({ 'Splendor+': 100, 'Pleasure+': 110, 'Xtreme 125R': 125, 'Glamour': 125, 'Xtreme 160R': 160, 'Maverick 440': 440 }[vehicle.model] || 0));
   const categories = [{ id: 'all', label: 'All bikes', detail: 'Every model' }, { id: 'commuter', label: '100–125 cc', detail: 'City & daily use' }, { id: 'premium', label: '150–200 cc', detail: 'Performance bikes' }, { id: 'big', label: '400 cc+', detail: 'Premium touring' }];
   const visible = vehicles.filter(vehicle => category === 'all' || category === 'commuter' && getCc(vehicle) >= 100 && getCc(vehicle) <= 125 || category === 'premium' && getCc(vehicle) >= 150 && getCc(vehicle) <= 200 || category === 'big' && getCc(vehicle) >= 400);
-  return <section className="inventory-layout"><div className="inventory-toolbar"><div><p className="eyebrow">CUSTOMER VIEW · FILTER BY ENGINE</p><h2>{categories.find(item => item.id === category)?.label}</h2></div><div className="inventory-actions-wrap" style={{display: 'flex', alignItems: 'center', gap: '16px'}}><div className="inventory-count">{visible.length} models · {visible.reduce((sum, v) => sum + Number(v.stock || 0), 0)} units</div><button className="outline-button" style={{margin: 0}} onClick={onManage}><Icon name="grid" size={14}/> Manage stock</button></div></div><div className="cc-tabs">{categories.map((item, index) => <button key={item.id} className={`cc-tab cc-tab-${item.id} ${category === item.id ? 'active' : ''}`} onClick={() => setCategory(item.id)}><span className="cc-tab-index">0{index + 1}</span><b>{item.label}</b><span>{item.detail}</span></button>)}</div><div className="inventory-grid">{visible.map(vehicle => <article className="inventory-card" key={vehicle.id} onClick={() => onDetails(vehicle)}><div className="bike-visual"><div className="bike-badge">{getCc(vehicle)} CC</div><Icon name="bike" size={56}/><span>{vehicle.color}</span><em className="view-detail-hint">View details <Icon name="arrow" size={12}/></em></div><div className="inventory-card-body"><div className="inventory-card-top"><div><h3>{vehicle.model}</h3><p>{vehicle.variant} · {getCc(vehicle)} cc</p></div><span className={vehicle.stock <= 2 ? 'stock-chip low' : 'stock-chip'}><i/>{vehicle.stock} in stock</span></div><div className="price-line"><div><small>ON-ROAD PRICE</small><strong>{money(vehicle.on_road_price || vehicle.ex_showroom_price)}</strong></div></div><div className="inventory-footer"><span>Ex-showroom {money(vehicle.ex_showroom_price)}</span><button className="sell-button" disabled={!vehicle.stock} onClick={e => { e.stopPropagation(); onSell(vehicle); }}>{vehicle.stock ? 'Sell this bike' : 'Sold out'} <Icon name="arrow" size={15}/></button></div></div></article>)}</div></section>;
+  return <section className="inventory-layout"><div className="inventory-toolbar"><div><p className="eyebrow">CUSTOMER VIEW · FILTER BY ENGINE</p><h2>{categories.find(item => item.id === category)?.label}</h2></div><div className="inventory-actions-wrap" style={{display: 'flex', alignItems: 'center', gap: '16px'}}><div className="inventory-count">{visible.length} models · {visible.reduce((sum, v) => sum + Number(v.stock || 0), 0)} units</div><button className="outline-button" style={{margin: 0}} onClick={onManage}><Icon name="grid" size={14}/> Manage stock</button></div></div><div className="cc-tabs">{categories.map((item, index) => <button key={item.id} className={`cc-tab cc-tab-${item.id} ${category === item.id ? 'active' : ''}`} onClick={() => setCategory(item.id)}><span className="cc-tab-index">0{index + 1}</span><b>{item.label}</b><span>{item.detail}</span></button>)}</div><div className="inventory-grid">{visible.map(vehicle => <article className="inventory-card" key={vehicle.id} onClick={() => onDetails(vehicle)}><div className="bike-visual"><div className="bike-badge">{getCc(vehicle)} CC</div>{vehicle.image_url ? <img src={vehicle.image_url} style={{width:'100%', height:'100%', maxHeight:'120px', objectFit:'contain', marginTop:'auto'}} alt=""/> : <Icon name="bike" size={56}/>}<span>{vehicle.color}</span><em className="view-detail-hint">View details <Icon name="arrow" size={12}/></em></div><div className="inventory-card-body"><div className="inventory-card-top"><div><h3>{vehicle.model}</h3><p>{vehicle.variant} · {getCc(vehicle)} cc</p></div><span className={vehicle.stock <= 2 ? 'stock-chip low' : 'stock-chip'}><i/>{vehicle.stock} in stock</span></div><div className="price-line"><div><small>ON-ROAD PRICE</small><strong>{money(vehicle.on_road_price || vehicle.ex_showroom_price)}</strong></div></div><div className="inventory-footer"><span>Ex-showroom {money(vehicle.ex_showroom_price)}</span><button className="sell-button" disabled={!vehicle.stock} onClick={e => { e.stopPropagation(); onSell(vehicle); }}>{vehicle.stock ? 'Sell this bike' : 'Sold out'} <Icon name="arrow" size={15}/></button></div></div></article>)}</div></section>;
 }
 
 function VehicleDetail({ vehicle, onBack, onSell }) {
   const cc = Number(vehicle.cc || ({ 'Splendor+': 100, 'Pleasure+': 110, 'Xtreme 125R': 125, 'Glamour': 125, 'Xtreme 160R': 160, 'Maverick 440': 440 }[vehicle.model] || 0));
   const colors = vehicle.available_colors || ({ 'Splendor+': ['Black', 'Silver', 'Blue'], 'Pleasure+': ['Pearl White', 'Matte Grey', 'Red'], 'Xtreme 125R': ['Matte Red', 'Black', 'Blue'], 'Glamour': ['Candy Red', 'Black', 'Grey'], 'Xtreme 160R': ['Sports Red', 'Stealth Black', 'Grey'], 'Maverick 440': ['Phantom Black', 'Stone Grey', 'Red'] }[vehicle.model] || [vehicle.color]);
-  return <section className="vehicle-detail"><button className="back-link" onClick={onBack}>← Back to inventory</button><div className="vehicle-detail-grid"><div className="vehicle-hero"><span className="bike-badge">{cc} CC · HERO</span><Icon name="bike" size={130}/><small>{vehicle.color}</small></div><div className="vehicle-info"><p className="eyebrow">MODEL DETAILS</p><h2>{vehicle.model}</h2><p className="vehicle-variant">{vehicle.variant} · {cc} cc</p><div className="vehicle-price"><small>ON-ROAD PRICE</small><strong>{money(vehicle.on_road_price || vehicle.ex_showroom_price)}</strong><span>Ex-showroom {money(vehicle.ex_showroom_price)}</span></div><div className="vehicle-actions"><button className="primary-button" disabled={!vehicle.stock} onClick={onSell}>{vehicle.stock ? 'Start sale' : 'Sold out'} <Icon name="arrow" size={15}/></button><span className={vehicle.stock <= 2 ? 'stock-chip low' : 'stock-chip'}><i/>{vehicle.stock} units available</span></div></div></div><div className="vehicle-detail-lower"><div className="detail-section"><p className="eyebrow">AVAILABLE COLOURS</p><h3>Choose a finish for the customer</h3><div className="color-list">{colors.map((color, index) => <span key={color}><i style={{background:['#212121','#bfc1c4','#b44538','#657487','#8f8f87'][index % 5]}}/>{color}</span>)}</div></div><div className="detail-section"><p className="eyebrow">FINANCE SNAPSHOT</p><h3>Starting EMI</h3><div className="detail-number">{money(Math.round(((Number(vehicle.on_road_price || vehicle.ex_showroom_price) * .8) * .115 / 12 * (1 + .115 / 12) ** 36) / ((1 + .115 / 12) ** 36 - 1)))}</div><span className="detail-note">20% down · 11.5% · 36 months</span></div></div></section>;
+  return <section className="vehicle-detail"><button className="back-link" onClick={onBack}>← Back to inventory</button><div className="vehicle-detail-grid"><div className="vehicle-hero"><span className="bike-badge">{cc} CC · HERO</span>{vehicle.image_url ? <img src={vehicle.image_url} style={{width:'100%', maxHeight:'200px', objectFit:'contain'}} alt=""/> : <Icon name="bike" size={130}/>}<small>{vehicle.color}</small></div><div className="vehicle-info"><p className="eyebrow">MODEL DETAILS</p><h2>{vehicle.model}</h2><p className="vehicle-variant">{vehicle.variant} · {cc} cc</p><div className="vehicle-price"><small>ON-ROAD PRICE</small><strong>{money(vehicle.on_road_price || vehicle.ex_showroom_price)}</strong><span>Ex-showroom {money(vehicle.ex_showroom_price)}</span></div><div className="vehicle-actions"><button className="primary-button" disabled={!vehicle.stock} onClick={onSell}>{vehicle.stock ? 'Start sale' : 'Sold out'} <Icon name="arrow" size={15}/></button><span className={vehicle.stock <= 2 ? 'stock-chip low' : 'stock-chip'}><i/>{vehicle.stock} units available</span></div></div></div><div className="vehicle-detail-lower"><div className="detail-section"><p className="eyebrow">AVAILABLE COLOURS</p><h3>Choose a finish for the customer</h3><div className="color-list">{colors.map((color, index) => <span key={color}><i style={{background:['#212121','#bfc1c4','#b44538','#657487','#8f8f87'][index % 5]}}/>{color}</span>)}</div></div><div className="detail-section"><p className="eyebrow">FINANCE SNAPSHOT</p><h3>Starting EMI</h3><div className="detail-number">{money(Math.round(((Number(vehicle.on_road_price || vehicle.ex_showroom_price) * .8) * .115 / 12 * (1 + .115 / 12) ** 36) / ((1 + .115 / 12) ** 36 - 1)))}</div><span className="detail-note">20% down · 11.5% · 36 months</span></div></div></section>;
 }
 
-function TestDrives({ drives, vehicles, onAdd, onStatusChange }) {
-  return <section className="test-drive-layout"><div className="test-drive-header"><div><p className="eyebrow">CUSTOMER FOLLOW-UP</p><h2>Test drive bookings</h2><p>Every enquiry ko appointment aur follow-up status ke saath track karo.</p></div><button className="primary-button" onClick={onAdd}><Icon name="plus" size={16}/> Book test drive</button></div><div className="drive-stats"><div><b>{drives.filter(d => d.status === 'Upcoming').length}</b><span>upcoming</span></div><div><b>{drives.filter(d => d.status === 'Confirmed').length}</b><span>confirmed</span></div><div><b>{drives.filter(d => d.status === 'Completed').length}</b><span>completed</span></div><div><b>{vehicles.length}</b><span>bikes available</span></div></div>{drives.length ? <div className="panel drive-table"><div className="table-head drive-table-head"><span>Customer</span><span>Vehicle</span><span>Appointment</span><span>Status</span><span>Update</span></div>{drives.map((drive, index) => <div className="drive-row" key={drive.id || index}><div className="customer"><div className="avatar" style={{background:['#e8d4ce','#dce3d3','#d9dcea','#e8e0cc'][index % 4]}}>{String(drive.customer_name || 'NK').split(' ').map(x => x[0]).join('').slice(0,2)}</div><div><b>{drive.customer_name}</b><small>{drive.phone || 'No phone added'}</small></div></div><span className="muted">{drive.vehicle_name || 'Vehicle not selected'}</span><span className="appointment"><b>{dateLabel(drive.scheduled_at)}</b><small>{new Date(drive.scheduled_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</small></span><span className={`status ${drive.status === 'Completed' ? 'success' : drive.status === 'Confirmed' ? 'info' : drive.status === 'No-show' ? 'warning' : ''}`}><i/>{drive.status}</span><select value={drive.status} onChange={e => onStatusChange(drive, e.target.value)}><option>Upcoming</option><option>Confirmed</option><option>Completed</option><option>No-show</option></select></div>)}</div> : <div className="panel placeholder-panel"><div className="empty-icon"><Icon name="bike" size={27}/></div><h2>No test drives booked</h2><p>Customer ka naam, bike aur appointment time add karke first booking create karo.</p><button className="primary-button" onClick={onAdd}><Icon name="plus" size={16}/> Book first test drive</button></div>}</section>;
+function TestDrivesWorkspace({ drives, vehicles, onAdd, onStatusChange, onInventoryChange, onToast }) {
+  const [tab, setTab] = useState('Bookings');
+  if (tab === 'Demo fleet') {
+    return <div style={{display: 'flex', flexDirection: 'column', height: '100%'}}>
+      <div className="workspace-tabs-group" style={{padding: '24px 32px 0'}}>
+        <div className="workspace-tabs">
+          <button className={tab === 'Bookings' ? 'active' : ''} onClick={() => setTab('Bookings')}>Bookings</button>
+          <button className={tab === 'Demo fleet' ? 'active' : ''} onClick={() => setTab('Demo fleet')}>Demo fleet</button>
+        </div>
+      </div>
+      <TestRideInventoryWorkspace vehicles={vehicles} onChange={onInventoryChange} onToast={onToast} />
+    </div>;
+  }
+  return <section className="test-drive-layout"><div className="workspace-tabs-group" style={{marginBottom: '24px'}}><div className="workspace-tabs"><button className={tab === 'Bookings' ? 'active' : ''} onClick={() => setTab('Bookings')}>Bookings</button><button className={tab === 'Demo fleet' ? 'active' : ''} onClick={() => setTab('Demo fleet')}>Demo fleet</button></div></div><div className="test-drive-header"><div><p className="eyebrow">CUSTOMER FOLLOW-UP</p><h2>Test drive bookings</h2><p>Every enquiry ko appointment aur follow-up status ke saath track karo.</p></div><button className="primary-button" onClick={onAdd}><Icon name="plus" size={16}/> Book test drive</button></div><div className="drive-stats"><div><b>{drives.filter(d => d.status === 'Upcoming').length}</b><span>upcoming</span></div><div><b>{drives.filter(d => d.status === 'Confirmed').length}</b><span>confirmed</span></div><div><b>{drives.filter(d => d.status === 'Completed').length}</b><span>completed</span></div><div><b>{vehicles.length}</b><span>bikes available</span></div></div>{drives.length ? <div className="panel drive-table"><div className="table-head drive-table-head"><span>Customer</span><span>Vehicle</span><span>Appointment</span><span>Status</span><span>Update</span></div>{drives.map((drive, index) => <div className="drive-row" key={drive.id || index}><div className="customer"><div className="avatar" style={{background:['#e8d4ce','#dce3d3','#d9dcea','#e8e0cc'][index % 4]}}>{String(drive.customer_name || 'NK').split(' ').map(x => x[0]).join('').slice(0,2)}</div><div><b>{drive.customer_name}</b><small>{drive.phone || 'No phone added'}</small></div></div><span className="muted">{drive.vehicle_name || 'Vehicle not selected'}</span><span className="appointment"><b>{dateLabel(drive.scheduled_at)}</b><small>{new Date(drive.scheduled_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</small></span><span className={`status ${drive.status === 'Completed' ? 'success' : drive.status === 'Confirmed' ? 'info' : drive.status === 'No-show' ? 'warning' : ''}`}><i/>{drive.status}</span><select value={drive.status} onChange={e => onStatusChange(drive, e.target.value)}><option>Upcoming</option><option>Confirmed</option><option>Completed</option><option>No-show</option></select></div>)}</div> : <div className="panel placeholder-panel"><div className="empty-icon"><Icon name="bike" size={27}/></div><h2>No test drives booked</h2><p>Customer ka naam, bike aur appointment time add karke first booking create karo.</p><button className="primary-button" onClick={onAdd}><Icon name="plus" size={16}/> Book first test drive</button></div>}</section>;
 }
 
-function Customers({ records }) {
-  return <section className="customers-layout"><div className="customers-header"><div><p className="eyebrow">RELATIONSHIP LOG</p><h2>Customer directory</h2><p>Sales, test drives aur RC follow-up ka single customer view.</p></div><span className="inventory-count">{records.length} customers</span></div>{records.length ? <div className="panel customer-table"><div className="table-head customer-table-head"><span>Customer</span><span>Phone</span><span>KYC</span><span>Last vehicle</span><span>Last amount</span><span>Added</span></div>{records.map((record, index) => <div className="customer-row" key={record.id || index}><div className="customer"><div className="avatar" style={{background:['#e8d4ce','#dce3d3','#d9dcea','#e8e0cc'][index % 4]}}>{String(record.name || 'NK').split(' ').map(x => x[0]).join('').slice(0,2)}</div><b>{record.name}</b></div><span className="muted">{record.phone || 'No phone added'}</span><span className="kyc-cell">A •••• {record.aadhaar_last4 || '—'}<br/>P {record.pan_masked || '—'}</span><span className="muted">{record.last_vehicle || 'Sale record linked'}</span><b>{record.last_amount ? money(record.last_amount) : '—'}</b><span className="muted">{dateLabel(record.created_at)}</span></div>)}</div> : <div className="panel placeholder-panel"><div className="empty-icon"><Icon name="users" size={27}/></div><h2>No customers yet</h2><p>Inventory se sale karte hi customer yahan automatically sync hoga.</p></div>}</section>;
+function Customers({ records, drives }) {
+  const [tab, setTab] = useState('Sales');
+  
+  // Deduplicate test drive customers by phone/name to only show unique customers
+  const uniqueDrivesMap = new Map();
+  if (drives) {
+    [...drives].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).forEach(d => {
+      const key = (d.phone || '') + (d.customer_name || '').toLowerCase();
+      if (!uniqueDrivesMap.has(key)) uniqueDrivesMap.set(key, d);
+    });
+  }
+  const uniqueDrives = Array.from(uniqueDrivesMap.values());
+
+  return <section className="customers-layout">
+    <div className="workspace-tabs-group" style={{marginBottom: '24px'}}>
+      <div className="workspace-tabs">
+        <button className={tab === 'Sales' ? 'active' : ''} onClick={() => setTab('Sales')}>Sales customers</button>
+        <button className={tab === 'Test drives' ? 'active' : ''} onClick={() => setTab('Test drives')}>Test drive customers</button>
+      </div>
+    </div>
+    <div className="customers-header">
+      <div>
+        <p className="eyebrow">RELATIONSHIP LOG</p>
+        <h2>Customer directory</h2>
+        <p>Sales, test drives aur RC follow-up ka single customer view.</p>
+      </div>
+      <span className="inventory-count">{tab === 'Sales' ? records.length : uniqueDrives.length} customers</span>
+    </div>
+    
+    {tab === 'Sales' ? (
+      records.length ? <div className="panel customer-table"><div className="table-head customer-table-head"><span>Customer</span><span>Phone</span><span>KYC</span><span>Last vehicle</span><span>Last amount</span><span>Added</span></div>{records.map((record, index) => <div className="customer-row" key={record.id || index}><div className="customer"><div className="avatar" style={{background:['#e8d4ce','#dce3d3','#d9dcea','#e8e0cc'][index % 4]}}>{String(record.name || 'NK').split(' ').map(x => x[0]).join('').slice(0,2)}</div><b>{record.name}</b></div><span className="muted">{record.phone || 'No phone added'}</span><span className="kyc-cell">A •••• {record.aadhaar_last4 || '—'}<br/>P {record.pan_masked || '—'}</span><span className="muted">{record.last_vehicle || 'Sale record linked'}</span><b>{record.last_amount ? money(record.last_amount) : '—'}</b><span className="muted">{dateLabel(record.created_at)}</span></div>)}</div> : <div className="panel placeholder-panel"><div className="empty-icon"><Icon name="users" size={27}/></div><h2>No customers yet</h2><p>Inventory se sale karte hi customer yahan automatically sync hoga.</p></div>
+    ) : (
+      uniqueDrives.length ? <div className="panel customer-table"><div className="table-head customer-table-head"><span>Customer</span><span>Phone</span><span>Interested in</span><span>Appointment</span><span>Status</span><span></span></div>{uniqueDrives.map((record, index) => <div className="customer-row" key={record.id || index}><div className="customer"><div className="avatar" style={{background:['#e8d4ce','#dce3d3','#d9dcea','#e8e0cc'][index % 4]}}>{String(record.customer_name || 'NK').split(' ').map(x => x[0]).join('').slice(0,2)}</div><b>{record.customer_name}</b></div><span className="muted">{record.phone || 'No phone added'}</span><span className="muted">{record.vehicle_name || 'Vehicle not selected'}</span><b>{dateLabel(record.scheduled_at)}</b><span className={`status ${record.status === 'Completed' ? 'success' : record.status === 'Confirmed' ? 'info' : record.status === 'No-show' ? 'warning' : ''}`}><i/>{record.status}</span><span /></div>)}</div> : <div className="panel placeholder-panel"><div className="empty-icon"><Icon name="users" size={27}/></div><h2>No test drive customers yet</h2><p>Test drives book karte hi customer yahan automatically sync hoga.</p></div>
+    )}
+  </section>;
 }
 
 function TestDriveModal({ vehicles, onClose, onSave }) {
@@ -380,11 +493,175 @@ function CustomerDetailModal({ sale, onClose }) {
   return <div className="modal-backdrop" onClick={onClose}><div className="modal customer-detail-modal" onClick={event => event.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">CUSTOMER PROFILE</p><h2>{sale.customer_name}</h2></div><button className="close" onClick={onClose}>×</button></div><div className="customer-detail-grid"><div><small>PHONE NUMBER</small><strong>{sale.customer_phone || 'Not added'}</strong></div><div className="vehicle-detail-highlight"><small>VEHICLE</small><strong>{sale.vehicle_name || 'Not added'}</strong></div><div><small>SALE VALUE</small><strong>{money(sale.sale_amount)}</strong></div>{sale.payment_status !== 'Paid' && <div><small>AMOUNT PAID</small><strong>{money(sale.amount_paid || 0)}</strong></div>}{sale.payment_status !== 'Paid' && <div><small>AMOUNT PENDING</small><strong style={{ color: '#d32f2f' }}>{money(Math.max(0, sale.sale_amount - (sale.amount_paid || 0)))}</strong></div>}<div><small>PAYMENT STATUS</small><strong>{sale.payment_status || 'Pending'}</strong></div>{sale.payment_status === 'Finance' && <div><small>EMI & TENURE</small><strong>{sale.emi_amount ? `${money(sale.emi_amount)} / ${sale.tenure_months}m` : 'Not recorded'}</strong></div>}<div><small>SALE DATE</small><strong>{dateLabel(sale.sale_date)}</strong></div><div><small>SALE ID</small><strong>#{sale.id}</strong></div></div><div className="customer-detail-note"><span>KYC documents</span><b>Stored privately in Supabase</b><small>Aadhaar/PAN are masked in the UI. Authorized staff can access uploaded documents from the customer record.</small></div><div className="modal-foot"><button className="primary-button" onClick={onClose}>Done</button></div></div></div>;
 }
 
+function InventoryManagementWorkspace({ inventory, onChange, onToast }) {
+  const [editing, setEditing] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const [editingStockByColor, setEditingStockByColor] = useState([]);
+  const [busy, setBusy] = useState(false);
+
+  function openEdit(vehicle) {
+    setEditing({ ...vehicle, file: null });
+    setEditingStockByColor(vehicle.stock_by_color || []);
+  }
+
+  async function confirmRemove() {
+    if (!deleting) return;
+    setBusy(true);
+    const vehicle = deleting;
+    const { error } = await supabase.from('inventory').delete().eq('id', vehicle.id);
+    if (error) {
+      onToast?.('Failed to delete: ' + error.message);
+    } else {
+      onChange(inventory.filter(v => v.id !== vehicle.id));
+      onToast?.(`Deleted ${vehicle.model}.`);
+    }
+    setBusy(false);
+    setDeleting(null);
+  }
+
+  async function save(e) {
+    e.preventDefault();
+    setBusy(true);
+    const totalStock = editingStockByColor.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+    const payload = { 
+      ex_showroom_price: Number(editing.ex_showroom_price), 
+      on_road_price: Number(editing.on_road_price),
+      stock: totalStock,
+      stock_by_color: editingStockByColor,
+      status: totalStock > 0 ? 'Available' : 'Unavailable'
+    };
+    
+    if (editing.file) {
+      try {
+        payload.image_url = await uploadVehicleImage(editing.file, editing.id);
+      } catch (err) {
+        onToast?.('Image upload failed: ' + err.message);
+        setBusy(false);
+        return;
+      }
+    }
+    
+    const { data, error } = await supabase.from('inventory').update(payload).eq('id', editing.id).select().single();
+    if (error) {
+      onToast?.('Failed to update: ' + error.message);
+      setBusy(false);
+      return;
+    }
+    
+    onChange(inventory.map(v => v.id === editing.id ? data : v));
+    onToast?.(`Updated ${editing.model} successfully.`);
+    setEditing(null);
+    setBusy(false);
+  }
+
+  return <section className="sales-workspace">
+    <div className="sales-workspace-head">
+      <div>
+        <p className="eyebrow">INVENTORY SETUP</p>
+        <h2>Inventory Management</h2>
+        <p>Update stock, pricing, and bike photos for the showroom catalog.</p>
+      </div>
+      <div className="workspace-tabs-group">
+        <span className="inventory-count">{inventory.length} models</span>
+      </div>
+    </div>
+    <div className="panel sales-records">
+      <div className="table-head sales-record-head" style={{gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr'}}>
+        <span>Vehicle</span>
+        <span>Ex-showroom</span>
+        <span>On-road</span>
+        <span>Stock</span>
+        <span></span>
+      </div>
+      {inventory.map(v => <div className="sales-record-row" key={v.id} style={{gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr'}}>
+        <div className="customer">
+          <div className="avatar" style={{background: '#f1f3f5', overflow: 'hidden'}}>
+            {v.image_url ? <img src={v.image_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt=""/> : <Icon name="bike" size={16}/>}
+          </div>
+          <div>
+            <b>{v.model}</b>
+            <small>{v.variant}</small>
+          </div>
+        </div>
+        <span>{money(v.ex_showroom_price)}</span>
+        <span>{money(v.on_road_price)}</span>
+        <span className={v.stock <= 2 ? 'status warning' : 'status success'}><i/>{v.stock} left</span>
+        <div className="sale-row-actions">
+          <button className="outline-button" style={{padding: '5px 10px', margin: 0, width: 'auto'}} onClick={() => openEdit(v)}>Edit</button>
+          <button className="outline-button danger-button" style={{padding: '5px 10px', margin: '0 0 0 8px', width: 'auto'}} onClick={() => setDeleting(v)}>Delete</button>
+        </div>
+      </div>)}
+    </div>
+    {editing && <div className="modal-backdrop" onClick={() => setEditing(null)}>
+      <div className="modal sale-modal" style={{maxWidth: '500px'}} onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>Edit {editing.model}</h2>
+          <button className="icon-button" onClick={() => setEditing(null)}><Icon name="x" size={20}/></button>
+        </div>
+        <form className="modal-body form-grid" style={{gridTemplateColumns: '1fr', gap: '16px'}} onSubmit={save}>
+          <div style={{display: 'flex', gap: '16px'}}>
+            <label style={{flex: 1}}>Ex-showroom Price (₹)<input type="number" required value={editing.ex_showroom_price} onChange={e => setEditing({...editing, ex_showroom_price: e.target.value})}/></label>
+            <label style={{flex: 1}}>On-road Price (₹)<input type="number" required value={editing.on_road_price} onChange={e => setEditing({...editing, on_road_price: e.target.value})}/></label>
+          </div>
+          <div>
+            <label>Color-wise Stock</label>
+            <div style={{display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px', padding: '12px', background: '#f8f9fa', borderRadius: '8px'}}>
+              {editingStockByColor.map((item, idx) => (
+                <div key={idx} style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+                  <input type="text" placeholder="Color (e.g. Matte Red)" required value={item.color} onChange={e => {
+                    const newArr = [...editingStockByColor];
+                    newArr[idx].color = e.target.value;
+                    setEditingStockByColor(newArr);
+                  }} style={{flex: 1}}/>
+                  <input type="number" placeholder="Qty" min="0" required value={item.qty} onChange={e => {
+                    const newArr = [...editingStockByColor];
+                    newArr[idx].qty = Number(e.target.value);
+                    setEditingStockByColor(newArr);
+                  }} style={{width: '80px'}}/>
+                  <button type="button" className="icon-button" onClick={() => {
+                    setEditingStockByColor(editingStockByColor.filter((_, i) => i !== idx));
+                  }}><Icon name="x" size={16}/></button>
+                </div>
+              ))}
+              <button type="button" className="ghost-button compact-button" style={{alignSelf: 'flex-start', marginTop: '4px'}} onClick={() => setEditingStockByColor([...editingStockByColor, { color: '', qty: 1 }])}>+ Add color variant</button>
+            </div>
+            <small className="hint">Total stock is calculated automatically.</small>
+          </div>
+          <div>
+            <label>Upload Photo<input type="file" accept="image/*" onChange={e => setEditing({...editing, file: e.target.files[0]})}/><small className="hint">Overrides the current bike photo.</small></label>
+          </div>
+          <div className="modal-foot" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+            <button type="button" className="ghost-button" onClick={() => setEditing(null)} style={{ flex: 1 }}>Cancel</button>
+            <button type="submit" disabled={busy} className="primary-button" style={{ flex: 1 }}>{busy ? 'Saving...' : 'Save Changes'}</button>
+          </div>
+        </form>
+      </div>
+    </div>}
+    {deleting && <div className="modal-backdrop" onClick={() => setDeleting(null)}>
+      <div className="modal sale-modal" style={{maxWidth: '400px'}} onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>Delete {deleting.model}?</h2>
+          <button className="icon-button" onClick={() => setDeleting(null)}><Icon name="x" size={20}/></button>
+        </div>
+        <div className="modal-body" style={{padding: '0 24px 24px'}}>
+          <p style={{margin: '0 0 20px', color: '#657487', fontSize: '14px', lineHeight: '1.5'}}>Are you sure you want to delete <b>{deleting.model}</b> from the inventory? This action cannot be undone and it will be removed from all screens.</p>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button type="button" className="ghost-button" onClick={() => setDeleting(null)} style={{ flex: 1 }}>Cancel</button>
+            <button type="button" disabled={busy} className="primary-button" style={{ flex: 1, background: '#d32f2f' }} onClick={confirmRemove}>{busy ? 'Deleting...' : 'Yes, Delete'}</button>
+          </div>
+        </div>
+      </div>
+    </div>}
+  </section>;
+}
+
 function TestRideInventoryWorkspace({ vehicles, onChange, onToast }) {
   const blank = { model: '', variant: '', cc: '', color: '', stock: 1 };
   const [items, setItems] = useState(vehicles);
   const [editing, setEditing] = useState(null);
+  const [deleting, setDeleting] = useState(null);
   const [showForm, setShowForm] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [form, setForm] = useState(blank);
 
   useEffect(() => setItems(vehicles), [vehicles]);
@@ -402,18 +679,28 @@ function TestRideInventoryWorkspace({ vehicles, onChange, onToast }) {
 
   function openEdit(vehicle) {
     setEditing(vehicle);
-    setForm({ model: vehicle.model || '', variant: vehicle.variant || '', cc: vehicle.cc || '', color: vehicle.color || '', stock: vehicle.stock ?? 0 });
+    setForm({ model: vehicle.model || '', variant: vehicle.variant || '', cc: vehicle.cc || '', color: vehicle.color || '', stock: vehicle.stock ?? 0, file: null });
     setShowForm(true);
   }
 
   async function saveVehicle(event) {
     event.preventDefault();
+    setBusy(true);
     const payload = { model: form.model.trim(), variant: form.variant.trim(), cc: Number(form.cc || 0), color: form.color.trim(), stock: Math.max(0, Number(form.stock || 0)), status: Number(form.stock || 0) > 0 ? 'Available' : 'Unavailable' };
-    if (!payload.model || !payload.variant || !payload.color) return;
+    if (!payload.model || !payload.variant || !payload.color) { setBusy(false); return; }
     let nextItem;
     if (editing?.id && !String(editing.id).startsWith('local-')) {
+      if (form.file) {
+        try {
+          payload.image_url = await uploadVehicleImage(form.file, editing.id);
+        } catch(err) {
+          notify(`Image upload failed: ${err.message}`);
+          setBusy(false);
+          return;
+        }
+      }
       const { data, error } = await supabase.from('test_drive_inventory').update(payload).eq('id', editing.id).select().single();
-      if (error) { notify(`Update failed: ${error.message}`); return; }
+      if (error) { notify(`Update failed: ${error.message}`); setBusy(false); return; }
       nextItem = data;
       const next = items.map(item => item.id === editing.id ? nextItem : item);
       setItems(next); onChange?.(next);
@@ -425,28 +712,56 @@ function TestRideInventoryWorkspace({ vehicles, onChange, onToast }) {
       notify('Test ride bike updated locally.');
     } else {
       const { data, error } = await supabase.from('test_drive_inventory').insert(payload).select().single();
-      if (error) { notify(`Add failed: ${error.message}`); return; }
+      if (error) { notify(`Add failed: ${error.message}`); setBusy(false); return; }
       nextItem = data;
+      if (form.file) {
+        try {
+          const image_url = await uploadVehicleImage(form.file, nextItem.id);
+          await supabase.from('test_drive_inventory').update({ image_url }).eq('id', nextItem.id);
+          nextItem.image_url = image_url;
+        } catch(err) { notify('Added bike, but image upload failed'); }
+      }
       const next = [nextItem, ...items];
       setItems(next); onChange?.(next);
       notify('Test ride bike added.');
     }
+    setBusy(false);
     setEditing(null);
     setShowForm(false);
   }
 
-  async function removeVehicle(vehicle) {
-    if (!window.confirm(`Delete ${vehicle.model} from test ride inventory?`)) return;
+  async function confirmRemove() {
+    if (!deleting) return;
+    setBusy(true);
+    const vehicle = deleting;
     if (vehicle.id && !String(vehicle.id).startsWith('local-')) {
       const { error } = await supabase.from('test_drive_inventory').delete().eq('id', vehicle.id);
-      if (error) { notify(`Delete failed: ${error.message}`); return; }
+      if (error) { notify(`Delete failed: ${error.message}`); setBusy(false); return; }
     }
     const next = items.filter(item => item.id !== vehicle.id);
     setItems(next); onChange?.(next); notify('Test ride bike removed.');
+    setBusy(false);
+    setDeleting(null);
   }
 
   const available = items.filter(vehicle => Number(vehicle.stock || 0) > 0).length;
-  return <section className="test-ride-inventory"><div className="test-ride-inventory-head"><div><p className="eyebrow">DEMO FLEET</p><h2>Test ride inventory</h2><p>Separate bikes reserved only for customer test rides.</p></div><div className="test-ride-head-actions"><div className="inventory-count">{available} available · {items.length} demo bikes</div><button className="primary-button" onClick={openAdd}><Icon name="plus" size={15}/> Add bike</button></div></div>{items.length ? <div className="panel demo-fleet-grid">{items.map((vehicle, index) => <div className="demo-fleet-row" key={vehicle.id || index}><div className="demo-bike-mark"><Icon name="bike" size={22}/></div><div><b>{vehicle.model}</b><small>{vehicle.variant} · {vehicle.cc || '—'} cc · {vehicle.color}</small></div><span className={Number(vehicle.stock) > 0 ? 'status success' : 'status warning'}><i/>{Number(vehicle.stock) > 0 ? `${vehicle.stock} available` : 'Unavailable'}</span><div className="demo-fleet-actions"><button className="ghost-button compact-button" onClick={() => openEdit(vehicle)}>Edit</button><button className="ghost-button compact-button danger-button" onClick={() => removeVehicle(vehicle)}>Delete</button></div></div>)}</div> : <div className="panel placeholder-panel"><h2>No demo bikes added</h2><p>Add a bike to create your separate test ride fleet.</p><button className="primary-button" onClick={openAdd}><Icon name="plus" size={15}/> Add first bike</button></div>}{showForm && <div className="modal-backdrop" onClick={() => { setShowForm(false); setEditing(null); }}><form className="modal demo-inventory-modal" onClick={event => event.stopPropagation()} onSubmit={saveVehicle}><div className="modal-head"><div><p className="eyebrow">{editing ? 'UPDATE DEMO BIKE' : 'ADD DEMO BIKE'}</p><h2>{editing ? 'Edit test ride bike' : 'Add test ride bike'}</h2></div><button type="button" className="close" onClick={() => { setShowForm(false); setEditing(null); }}>×</button></div><div className="form-grid"><label>Model<input value={form.model} onChange={event => setForm({ ...form, model: event.target.value })} placeholder="e.g. Xtreme 125R" required/></label><label>Variant<input value={form.variant} onChange={event => setForm({ ...form, variant: event.target.value })} placeholder="e.g. ABS" required/></label><label>Engine cc<input type="number" min="0" value={form.cc} onChange={event => setForm({ ...form, cc: event.target.value })} placeholder="125" required/></label><label>Colour<input value={form.color} onChange={event => setForm({ ...form, color: event.target.value })} placeholder="Matte Red" required/></label><label>Available stock<input type="number" min="0" value={form.stock} onChange={event => setForm({ ...form, stock: event.target.value })} required/><small className="hint">0 stock means unavailable for booking</small></label></div><div className="modal-foot"><button type="button" className="ghost-button" onClick={() => { setShowForm(false); setEditing(null); }}>Cancel</button><button className="primary-button" type="submit"><Icon name="check" size={15}/> {editing ? 'Save changes' : 'Add bike'}</button></div></form></div>}</section>;
+  return <section className="test-ride-inventory" style={{paddingTop: 0, height: 'auto', flex: 1}}><div className="test-ride-inventory-head"><div><p className="eyebrow">DEMO FLEET</p><h2>Test ride inventory</h2><p>Separate bikes reserved only for customer test rides.</p></div><div className="test-ride-head-actions"><div className="inventory-count">{available} available · {items.length} demo bikes</div><button className="primary-button" onClick={openAdd}><Icon name="plus" size={15}/> Add bike</button></div></div>{items.length ? <div className="panel demo-fleet-grid">{items.map((vehicle, index) => <div className="demo-fleet-row" key={vehicle.id || index}><div className="demo-bike-mark">{vehicle.image_url ? <img src={vehicle.image_url} style={{width:'100%', height:'100%', objectFit:'cover'}} alt=""/> : <Icon name="bike" size={22}/>}</div><div><b>{vehicle.model}</b><small>{vehicle.variant} · {vehicle.cc || '—'} cc · {vehicle.color}</small></div><span className={Number(vehicle.stock) > 0 ? 'status success' : 'status warning'}><i/>{Number(vehicle.stock) > 0 ? `${vehicle.stock} available` : 'Unavailable'}</span><div className="demo-fleet-actions"><button className="ghost-button compact-button" onClick={() => openEdit(vehicle)}>Edit</button><button className="ghost-button compact-button danger-button" onClick={() => setDeleting(vehicle)}>Delete</button></div></div>)}</div> : <div className="panel placeholder-panel"><h2>No demo bikes added</h2><p>Add a bike to create your separate test ride fleet.</p><button className="primary-button" onClick={openAdd}><Icon name="plus" size={15}/> Add first bike</button></div>}{showForm && <div className="modal-backdrop" onClick={() => { setShowForm(false); setEditing(null); }}><form className="modal demo-inventory-modal" onClick={event => event.stopPropagation()} onSubmit={saveVehicle}><div className="modal-head"><div><p className="eyebrow">{editing ? 'UPDATE DEMO BIKE' : 'ADD DEMO BIKE'}</p><h2>{editing ? 'Edit test ride bike' : 'Add test ride bike'}</h2></div><button type="button" className="close" onClick={() => { setShowForm(false); setEditing(null); }}>×</button></div><div className="form-grid"><label>Model<input value={form.model} onChange={event => setForm({ ...form, model: event.target.value })} placeholder="e.g. Xtreme 125R" required/></label><label>Variant<input value={form.variant} onChange={event => setForm({ ...form, variant: event.target.value })} placeholder="e.g. ABS" required/></label><label>Engine cc<input type="number" min="0" value={form.cc} onChange={event => setForm({ ...form, cc: event.target.value })} placeholder="125" required/></label><label>Colour<input value={form.color} onChange={event => setForm({ ...form, color: event.target.value })} placeholder="Matte Red" required/></label><label>Available stock<input type="number" min="0" value={form.stock} onChange={event => setForm({ ...form, stock: event.target.value })} required/><small className="hint">0 stock means unavailable for booking</small></label><label>Upload Photo<input type="file" title=" " accept="image/*" onChange={e => setForm({...form, file: e.target.files[0]})}/></label></div><div className="modal-foot"><button type="button" className="ghost-button" onClick={() => { setShowForm(false); setEditing(null); }}>Cancel</button><button className="primary-button" type="submit" disabled={busy}><Icon name="check" size={15}/> {editing ? 'Save changes' : 'Add bike'}</button></div></form></div>}
+  {deleting && <div className="modal-backdrop" onClick={() => setDeleting(null)}>
+      <div className="modal sale-modal" style={{maxWidth: '400px'}} onClick={e => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>Delete {deleting.model}?</h2>
+          <button className="icon-button" onClick={() => setDeleting(null)}><Icon name="x" size={20}/></button>
+        </div>
+        <div className="modal-body" style={{padding: '0 24px 24px'}}>
+          <p style={{margin: '0 0 20px', color: '#657487', fontSize: '14px', lineHeight: '1.5'}}>Are you sure you want to delete <b>{deleting.model}</b> from the test ride inventory? This action cannot be undone.</p>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button type="button" className="ghost-button" onClick={() => setDeleting(null)} style={{ flex: 1 }}>Cancel</button>
+            <button type="button" disabled={busy} className="primary-button" style={{ flex: 1, background: '#d32f2f' }} onClick={confirmRemove}>{busy ? 'Deleting...' : 'Yes, Delete'}</button>
+          </div>
+        </div>
+      </div>
+    </div>}
+  </section>;
 }
 
 
@@ -471,9 +786,13 @@ function SignaturePad({ value, onChange }) {
 }
 
 function SaleModal({ vehicle, onClose, onSave }) {
-  const [customer, setCustomer] = useState(''); const [phone, setPhone] = useState(''); const [aadhaar, setAadhaar] = useState(''); const [pan, setPan] = useState(''); const [aadhaarFile, setAadhaarFile] = useState(null); const [panFile, setPanFile] = useState(null); const [signature, setSignature] = useState(''); const [discount, setDiscount] = useState('0'); const [payment, setPayment] = useState('Pending'); const [saleType, setSaleType] = useState('Sale'); const [oldVehicleName, setOldVehicleName] = useState(''); const [oldVehicleRegistration, setOldVehicleRegistration] = useState(''); const [exchangeValue, setExchangeValue] = useState('0'); const [exchangeDiscount, setExchangeDiscount] = useState('0'); const [rcFile, setRcFile] = useState(null); const [emiAmount, setEmiAmount] = useState(''); const [tenureMonths, setTenureMonths] = useState(''); const [amountPaid, setAmountPaid] = useState('');
+  let availableColors = vehicle.stock_by_color?.filter(s => Number(s.qty) > 0).map(s => s.color);
+  if (!availableColors || availableColors.length === 0) {
+    availableColors = vehicle.available_colors || ({ 'Splendor+': ['Black', 'Silver', 'Blue'], 'Pleasure+': ['Pearl White', 'Matte Grey', 'Red'], 'Xtreme 125R': ['Matte Red', 'Black', 'Blue'], 'Glamour': ['Candy Red', 'Black', 'Grey'], 'Xtreme 160R': ['Sports Red', 'Stealth Black', 'Grey'], 'Maverick 440': ['Phantom Black', 'Stone Grey', 'Red'] }[vehicle.model] || [vehicle.color || 'Default']);
+  }
+  const [customer, setCustomer] = useState(''); const [phone, setPhone] = useState(''); const [aadhaar, setAadhaar] = useState(''); const [pan, setPan] = useState(''); const [aadhaarFile, setAadhaarFile] = useState(null); const [panFile, setPanFile] = useState(null); const [signature, setSignature] = useState(''); const [discount, setDiscount] = useState('0'); const [payment, setPayment] = useState('Pending'); const [saleType, setSaleType] = useState('Sale'); const [oldVehicleName, setOldVehicleName] = useState(''); const [oldVehicleRegistration, setOldVehicleRegistration] = useState(''); const [exchangeValue, setExchangeValue] = useState('0'); const [exchangeDiscount, setExchangeDiscount] = useState('0'); const [rcFile, setRcFile] = useState(null); const [emiAmount, setEmiAmount] = useState(''); const [tenureMonths, setTenureMonths] = useState(''); const [amountPaid, setAmountPaid] = useState(''); const [vehicleColor, setVehicleColor] = useState(availableColors[0]);
   const base = Number(vehicle.on_road_price || vehicle.ex_showroom_price); const safeDiscount = Math.min(Number(discount || 0), Number(vehicle.max_discount || 0)); const safeExchangeValue = saleType === 'Exchange' ? Math.max(0, Number(exchangeValue || 0)) : 0; const safeExchangeDiscount = saleType === 'Exchange' ? Math.max(0, Number(exchangeDiscount || 0)) : 0; const finalAmount = Math.max(0, base - safeDiscount - safeExchangeValue - safeExchangeDiscount);
-  return <div className="modal-backdrop" onClick={onClose}><div className="modal sale-modal" onClick={e => e.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">CONFIRM SALE</p><h2>{vehicle.model} <span>{vehicle.variant}</span></h2></div><button className="close" onClick={onClose}>×</button></div><div className={`sale-summary ${saleType === 'Exchange' ? 'has-exchange' : ''}`}><div><small>LISTED PRICE</small><b>{money(base)}</b></div><div><small>FINAL AMOUNT</small><strong>{money(finalAmount)}</strong></div>{saleType === 'Exchange' && <div className="exchange-summary"><small>EXCHANGE BENEFIT</small><b>− {money(safeExchangeValue + safeExchangeDiscount)}</b></div>}</div><div className="form-grid"><label>Customer name<input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="e.g. Priya Shah" required/></label><label>Phone number<input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+91 98XXX XXXXX"/></label><label>Aadhaar number <span className="privacy-note">last 4 only<input inputMode="numeric" maxLength="12" value={aadhaar} onChange={e => setAadhaar(e.target.value)} placeholder="XXXX XXXX 1234"/></span></label><label>PAN number <span className="privacy-note">masked in record<input maxLength="10" value={pan} onChange={e => setPan(e.target.value.toUpperCase())} placeholder="ABCDE1234F"/></span></label><label>Upload Aadhaar<input type="file" accept="image/*,.pdf" onChange={e => setAadhaarFile(e.target.files?.[0] || null)}/><small className="hint">Private Supabase storage</small></label><label>Upload PAN<input type="file" accept="image/*,.pdf" onChange={e => setPanFile(e.target.files?.[0] || null)}/><small className="hint">Private Supabase storage</small></label><label>Discount<input type="number" min="0" max={vehicle.max_discount} value={discount} onChange={e => setDiscount(e.target.value)}/><small className="hint">Allowed up to {money(vehicle.max_discount)}</small></label><label>Payment status<select value={payment} onChange={e => setPayment(e.target.value)}><option>Pending</option><option>Paid</option><option>Finance</option></select></label><label>Amount paid (Advance)<input type="number" min="0" value={amountPaid} onChange={e => setAmountPaid(e.target.value)} placeholder="e.g. 5000"/><small className="hint">Remaining: {money(Math.max(0, finalAmount - Number(amountPaid || 0)))}</small></label>{payment === 'Finance' && <><label>EMI Amount<input type="number" min="0" value={emiAmount} onChange={e => setEmiAmount(e.target.value)} placeholder="e.g. 3500"/></label><label>Tenure (Months)<input type="number" min="0" value={tenureMonths} onChange={e => setTenureMonths(e.target.value)} placeholder="e.g. 24"/></label></>}<label>Sale type<select value={saleType} onChange={e => setSaleType(e.target.value)}><option>Sale</option><option>Exchange</option></select></label>{saleType === 'Exchange' && <><label>Old bike model/name<input value={oldVehicleName} onChange={e => setOldVehicleName(e.target.value)} placeholder="e.g. Splendor+ 2019" required/></label><label>Old bike registration number<input value={oldVehicleRegistration} onChange={e => setOldVehicleRegistration(e.target.value)} placeholder="MH01AB1234" required/></label><label>Exchange value<input type="number" min="0" value={exchangeValue} onChange={e => setExchangeValue(e.target.value)} placeholder="50000" required/><small className="hint">Old bike value deducted from final amount</small></label><label>Exchange discount<input type="number" min="0" value={exchangeDiscount} onChange={e => setExchangeDiscount(e.target.value)} placeholder="5000"/><small className="hint">Additional exchange offer</small></label><label>Upload old bike RC<input type="file" accept="image/*,.pdf" onChange={e => setRcFile(e.target.files?.[0] || null)}/><small className="hint">Private Supabase storage</small></label></>}</div><SignaturePad value={signature} onChange={setSignature}/><div className="modal-foot"><button className="ghost-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={!customer} onClick={() => onSave({ customer, phone, aadhaar, pan, aadhaarFile, panFile, signature, discount: safeDiscount, payment, saleType, oldVehicleName, oldVehicleRegistration, exchangeValue: safeExchangeValue, exchangeDiscount: safeExchangeDiscount, rcFile, emiAmount, tenureMonths, amountPaid: amountPaid ? Number(amountPaid) : (payment === 'Paid' ? finalAmount : 0) })}><Icon name="check" size={16}/> Save sale + invoice</button></div></div></div>;
+  return <div className="modal-backdrop" onClick={onClose}><div className="modal sale-modal" onClick={e => e.stopPropagation()}><div className="modal-head"><div><p className="eyebrow">CONFIRM SALE</p><h2>{vehicle.model} <span>{vehicle.variant}</span></h2></div><button className="close" onClick={onClose}>×</button></div><div className={`sale-summary ${saleType === 'Exchange' ? 'has-exchange' : ''}`}><div><small>LISTED PRICE</small><b>{money(base)}</b></div><div><small>FINAL AMOUNT</small><strong>{money(finalAmount)}</strong></div>{saleType === 'Exchange' && <div className="exchange-summary"><small>EXCHANGE BENEFIT</small><b>− {money(safeExchangeValue + safeExchangeDiscount)}</b></div>}</div><div className="form-grid"><label>Customer name<input value={customer} onChange={e => setCustomer(e.target.value)} placeholder="e.g. Priya Shah" required/></label><label>Phone number<input value={phone} onChange={e => setPhone(e.target.value)} placeholder="+91 98XXX XXXXX"/></label><label>Vehicle color<select value={vehicleColor} onChange={e => setVehicleColor(e.target.value)}>{availableColors.map(c => <option key={c} value={c}>{c}</option>)}</select></label><label>Aadhaar number <span className="privacy-note">last 4 only<input inputMode="numeric" maxLength="12" value={aadhaar} onChange={e => setAadhaar(e.target.value)} placeholder="XXXX XXXX 1234"/></span></label><label>PAN number <span className="privacy-note">masked in record<input maxLength="10" value={pan} onChange={e => setPan(e.target.value.toUpperCase())} placeholder="ABCDE1234F"/></span></label><label>Upload Aadhaar<input type="file" accept="image/*,.pdf" onChange={e => setAadhaarFile(e.target.files?.[0] || null)}/><small className="hint">Private Supabase storage</small></label><label>Upload PAN<input type="file" accept="image/*,.pdf" onChange={e => setPanFile(e.target.files?.[0] || null)}/><small className="hint">Private Supabase storage</small></label><label>Discount<input type="number" min="0" max={vehicle.max_discount} value={discount} onChange={e => setDiscount(e.target.value)}/><small className="hint">Allowed up to {money(vehicle.max_discount)}</small></label><label>Payment status<select value={payment} onChange={e => setPayment(e.target.value)}><option>Pending</option><option>Paid</option><option>Finance</option></select></label><label>Amount paid (Advance)<input type="number" min="0" value={amountPaid} onChange={e => setAmountPaid(e.target.value)} placeholder="e.g. 5000"/><small className="hint">Remaining: {money(Math.max(0, finalAmount - Number(amountPaid || 0)))}</small></label>{payment === 'Finance' && <><label>EMI Amount<input type="number" min="0" value={emiAmount} onChange={e => setEmiAmount(e.target.value)} placeholder="e.g. 3500"/></label><label>Tenure (Months)<input type="number" min="0" value={tenureMonths} onChange={e => setTenureMonths(e.target.value)} placeholder="e.g. 24"/></label></>}<label>Sale type<select value={saleType} onChange={e => setSaleType(e.target.value)}><option>Sale</option><option>Exchange</option></select></label>{saleType === 'Exchange' && <><label>Old bike model/name<input value={oldVehicleName} onChange={e => setOldVehicleName(e.target.value)} placeholder="e.g. Splendor+ 2019" required/></label><label>Old bike registration number<input value={oldVehicleRegistration} onChange={e => setOldVehicleRegistration(e.target.value)} placeholder="MH01AB1234" required/></label><label>Exchange value<input type="number" min="0" value={exchangeValue} onChange={e => setExchangeValue(e.target.value)} placeholder="50000" required/><small className="hint">Old bike value deducted from final amount</small></label><label>Exchange discount<input type="number" min="0" value={exchangeDiscount} onChange={e => setExchangeDiscount(e.target.value)} placeholder="5000"/><small className="hint">Additional exchange offer</small></label><label>Upload old bike RC<input type="file" accept="image/*,.pdf" onChange={e => setRcFile(e.target.files?.[0] || null)}/><small className="hint">Private Supabase storage</small></label></>}</div><SignaturePad value={signature} onChange={setSignature}/><div className="modal-foot"><button className="ghost-button" onClick={onClose}>Cancel</button><button className="primary-button" disabled={!customer} onClick={() => onSave({ customer, phone, aadhaar, pan, aadhaarFile, panFile, signature, discount: safeDiscount, payment, saleType, oldVehicleName, oldVehicleRegistration, exchangeValue: safeExchangeValue, exchangeDiscount: safeExchangeDiscount, rcFile, emiAmount, tenureMonths, amountPaid: amountPaid ? Number(amountPaid) : (payment === 'Paid' ? finalAmount : 0), vehicleColor })}><Icon name="check" size={16}/> Save sale + invoice</button></div></div></div>;
 }
 
 function InvoiceModal({ record, onClose }) {

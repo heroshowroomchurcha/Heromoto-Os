@@ -17,6 +17,7 @@ alter table if exists public.sales add column if not exists old_vehicle_registra
 alter table if exists public.sales add column if not exists exchange_discount numeric default 0;
 alter table if exists public.sales add column if not exists exchange_value numeric default 0;
 alter table if exists public.sales add column if not exists rc_photo_path text;
+alter table if exists public.sales add column if not exists vehicle_color text;
 alter table if exists public.sales add column if not exists updated_at timestamptz default now();
 alter table if exists public.rc_records add column if not exists customer_phone text;
 alter table if exists public.sales enable row level security;
@@ -31,8 +32,9 @@ create table if not exists public.test_drive_inventory (
   model text not null,
   variant text,
   cc integer,
-  color text,
-  stock integer not null default 1,
+  on_road_price numeric,
+  stock integer default 0,
+  stock_by_color jsonb default '[]'::jsonb,
   status text not null default 'Available',
   created_at timestamptz default now()
 );
@@ -201,3 +203,35 @@ create table if not exists public.pending_dues (
   created_at timestamptz default now()
 );
 alter table if exists public.pending_dues enable row level security;
+
+-- Add image_url to inventory
+alter table if exists public.inventory add column if not exists image_url text;
+
+-- Storage setup for vehicle images
+insert into storage.buckets (id, name, public)
+values ('vehicle-images', 'vehicle-images', true)
+on conflict (id) do update set public = true;
+
+drop policy if exists "Staff upload vehicle images" on storage.objects;
+drop policy if exists "Staff delete vehicle images" on storage.objects;
+drop policy if exists "Public read vehicle images" on storage.objects;
+
+create policy "Staff upload vehicle images" on storage.objects for insert to authenticated
+with check (bucket_id = 'vehicle-images');
+
+create policy "Staff delete vehicle images" on storage.objects for delete to authenticated
+using (bucket_id = 'vehicle-images');
+
+create policy "Public read vehicle images" on storage.objects for select to public
+using (bucket_id = 'vehicle-images');
+
+-- Update foreign key constraint to allow deleting inventory bikes without deleting sales
+alter table if exists public.sales
+  drop constraint if exists sales_vehicle_id_fkey;
+  
+alter table if exists public.sales
+  add constraint sales_vehicle_id_fkey foreign key (vehicle_id) references public.inventory(id) on delete set null;
+
+-- Add missing columns to test_drive_inventory
+alter table if exists public.test_drive_inventory add column if not exists image_url text;
+alter table if exists public.test_drive_inventory add column if not exists color text;

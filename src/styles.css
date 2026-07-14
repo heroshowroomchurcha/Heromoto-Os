@@ -50,6 +50,7 @@
 @media (max-width:720px){.auth-screen{display:block}.auth-panel{min-height:100vh;padding:32px 22px 42px}.auth-panel h1{font-size:42px;letter-spacing:-2px}.auth-panel form{grid-template-columns:1fr}.auth-panel label:first-child:last-child,.auth-panel form label:first-child:nth-last-child(3){grid-column:auto}.auth-submit{grid-column:auto}.auth-side{display:none}}
 
 /* Typography and surface polish */
+.mobile-brand { display: none; }
 button,input,select{font-family:inherit}
 .nav-item,.primary-button,.dark-button,.sell-button{transition:background .18s ease,color .18s ease,transform .18s ease,box-shadow .18s ease}
 .nav-item:hover{background:#eeefeb;color:var(--ink)}
