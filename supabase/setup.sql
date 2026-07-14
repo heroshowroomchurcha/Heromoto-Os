@@ -134,12 +134,29 @@ create policy "MVP write RC records" on public.rc_records for all to authenticat
 -- Starter inventory. Safe to run more than once: only adds models that are absent.
 insert into public.inventory (model, variant, cc, color, ex_showroom_price, on_road_price, max_discount, stock)
 select * from (values
-  ('Splendor+', 'XTEC 2.0', 100, 'Black', 82900::numeric, 98740::numeric, 3500::numeric, 8),
-  ('Xtreme 125R', 'ABS', 125, 'Matte Red', 99500::numeric, 116890::numeric, 5000::numeric, 5),
-  ('Xtreme 160R', '4V', 160, 'Sports Red', 120000::numeric, 142600::numeric, 7000::numeric, 4),
-  ('Maverick 440', 'Base', 440, 'Phantom Black', 199000::numeric, 248600::numeric, 10000::numeric, 2),
-  ('Pleasure+', 'XTEC', 110, 'Pearl White', 72000::numeric, 92450::numeric, 3000::numeric, 6),
-  ('Glamour', 'Disc Brake', 125, 'Candy Red', 85000::numeric, 101500::numeric, 4000::numeric, 5)
+  ('Destini Prime', 'Standard', 125, 'TBD', 71499::numeric, 85000::numeric, 3000::numeric, 5),
+  ('Destini 125', 'Standard', 125, 'TBD', 80000::numeric, 95000::numeric, 3000::numeric, 5),
+  ('Xoom', 'Standard', 111, 'TBD', 76000::numeric, 90000::numeric, 3000::numeric, 5),
+  ('Xoom 125', 'Standard', 125, 'TBD', 85000::numeric, 100000::numeric, 3000::numeric, 5),
+  ('Pleasure+ XTEC', 'Standard', 111, 'TBD', 78000::numeric, 92000::numeric, 3000::numeric, 5),
+  ('Splendor+', 'Standard', 97, 'TBD', 75000::numeric, 89000::numeric, 2000::numeric, 5),
+  ('Splendor+ XTEC', 'Standard', 97, 'TBD', 79000::numeric, 93000::numeric, 2000::numeric, 5),
+  ('Splendor+ XTEC 2.0', 'Standard', 97, 'TBD', 82900::numeric, 98740::numeric, 3500::numeric, 8),
+  ('Splendor+ Flex', 'Standard', 97, 'TBD', 85000::numeric, 100000::numeric, 2000::numeric, 5),
+  ('Passion+', 'Standard', 97, 'TBD', 77000::numeric, 91000::numeric, 2000::numeric, 5),
+  ('Passion XTEC', 'Standard', 113, 'TBD', 81000::numeric, 96000::numeric, 2000::numeric, 5),
+  ('Super Splendor', 'Standard', 125, 'TBD', 80000::numeric, 95000::numeric, 3000::numeric, 5),
+  ('Super Splendor XTEC', 'Standard', 125, 'TBD', 85000::numeric, 100000::numeric, 3000::numeric, 5),
+  ('Glamour', 'Disc Brake', 125, 'TBD', 85000::numeric, 101500::numeric, 4000::numeric, 5),
+  ('Glamour XTEC', 'Standard', 125, 'TBD', 89000::numeric, 105000::numeric, 4000::numeric, 5),
+  ('Xtreme 125R', 'ABS', 125, 'TBD', 99500::numeric, 116890::numeric, 5000::numeric, 5),
+  ('Xtreme 160R 4V', 'Standard', 163, 'TBD', 127000::numeric, 150000::numeric, 7000::numeric, 4),
+  ('Xtreme 160R 2V', 'Standard', 163, 'TBD', 120000::numeric, 142600::numeric, 7000::numeric, 4),
+  ('Xtreme 200S 4V', 'Standard', 200, 'TBD', 141000::numeric, 165000::numeric, 7000::numeric, 4),
+  ('XPulse 200 4V', 'Standard', 200, 'TBD', 144000::numeric, 169000::numeric, 7000::numeric, 4),
+  ('XPulse 200T 4V', 'Standard', 200, 'TBD', 140000::numeric, 164000::numeric, 7000::numeric, 4),
+  ('Karizma XMR', 'Standard', 210, 'TBD', 179000::numeric, 210000::numeric, 10000::numeric, 3),
+  ('Mavrick 440', 'Base', 440, 'TBD', 199000::numeric, 248600::numeric, 10000::numeric, 2)
 ) as seed(model, variant, cc, color, ex_showroom_price, on_road_price, max_discount, stock)
 where not exists (
   select 1 from public.inventory existing where existing.model = seed.model and existing.variant = seed.variant
