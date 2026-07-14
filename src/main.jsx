@@ -480,7 +480,7 @@ function InvoiceModal({ record, onClose }) {
 }
 
 function PricingModal({ vehicle, isEmi, onClose }) {
-  return <div className="modal-backdrop" onClick={onClose}><div className="sale-modal" onClick={e => e.stopPropagation()}><div className="modal-head"><h2>{isEmi ? 'EMI finance breakdown' : 'Pricing breakdown'}</h2><button className="icon-button" onClick={onClose}><Icon name="x" size={20}/></button></div><div className="modal-body pricing-rows"><div className="pricing-row"><span>Ex-showroom price</span><strong>{money(vehicle.ex_showroom_price)}</strong></div><div className="pricing-row"><span>RTO + Insurance + PDI</span><strong>{money(vehicle.on_road_price - vehicle.ex_showroom_price)}</strong></div><div className="pricing-row"><span>Accessories kit</span><strong>Included</strong></div><div className="pricing-row total-row"><span>Total on-road price</span><strong>{money(vehicle.on_road_price)}</strong></div><p className="pricing-note">Subject to change. Validity: 15 days.</p></div></div></div>;
+  return <div className="modal-backdrop" onClick={onClose}><div className="modal sale-modal" onClick={e => e.stopPropagation()}><div className="modal-head"><h2>{isEmi ? 'EMI finance breakdown' : 'Pricing breakdown'}</h2><button className="icon-button" onClick={onClose}><Icon name="x" size={20}/></button></div><div className="modal-body pricing-rows"><div className="pricing-row"><span>Ex-showroom price</span><strong>{money(vehicle.ex_showroom_price)}</strong></div><div className="pricing-row"><span>RTO + Insurance + PDI</span><strong>{money(vehicle.on_road_price - vehicle.ex_showroom_price)}</strong></div><div className="pricing-row"><span>Accessories kit</span><strong>Included</strong></div><div className="pricing-row total-row"><span>Total on-road price</span><strong>{money(vehicle.on_road_price)}</strong></div><p className="pricing-note">Subject to change. Validity: 15 days.</p></div></div></div>;
 }
 
 function PendingDuesWorkspace({ dues, onChange, onToast }) {
@@ -567,19 +567,19 @@ function PendingDuesModal({ onClose, onSave }) {
   }
 
   return <div className="modal-backdrop" onClick={onClose}>
-    <div className="sale-modal" style={{maxWidth: '400px'}} onClick={e => e.stopPropagation()}>
+    <div className="modal sale-modal" style={{maxWidth: '400px'}} onClick={e => e.stopPropagation()}>
       <div className="modal-head">
         <h2>Add pending due</h2>
         <button className="icon-button" onClick={onClose}><Icon name="x" size={20}/></button>
       </div>
-      <form className="modal-body" onSubmit={submit}>
-        <div className="form-row">
+      <form className="modal-body form-grid" style={{gridTemplateColumns: '1fr', gap: '16px'}} onSubmit={submit}>
+        <div>
           <label>Customer name <input autoFocus required placeholder="Rahul Sharma" value={form.customer_name} onChange={e => setForm({...form, customer_name: e.target.value})} /></label>
         </div>
-        <div className="form-row">
+        <div>
           <label>Phone number <input type="tel" placeholder="9876543210" value={form.customer_phone} onChange={e => setForm({...form, customer_phone: e.target.value})} /></label>
         </div>
-        <div className="form-row">
+        <div>
           <label>Amount (₹) <input type="number" required min="1" placeholder="500" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} /></label>
         </div>
         <div className="modal-foot" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
