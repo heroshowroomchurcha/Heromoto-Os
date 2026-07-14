@@ -202,20 +202,7 @@ function App() {
         setToast(`Sale save ho rahi hai, lekin document upload fail hua: ${documentError.message}`);
       }
     }
-    // Temporary fix: Omitting new columns (EMI, Exchange) from the Supabase insert 
-    // so that it doesn't crash with 400 Bad Request if the user hasn't run the SQL script yet.
-    const sale = { 
-      customer_id: customerRow?.id || null, 
-      customer_name: form.customer, 
-      customer_phone: form.phone, 
-      vehicle_id: vehicle.id, 
-      vehicle_name: `${vehicle.model} ${vehicle.variant || ''}`.trim(), 
-      original_price: vehicle.on_road_price || vehicle.ex_showroom_price, 
-      discount, 
-      sale_amount: saleAmount, 
-      payment_status: form.payment, 
-      signature_data: form.signature || null 
-    };
+    const sale = { customer_id: customerRow?.id || null, customer_name: form.customer, customer_phone: form.phone, vehicle_id: vehicle.id, vehicle_name: `${vehicle.model} ${vehicle.variant || ''}`.trim(), original_price: vehicle.on_road_price || vehicle.ex_showroom_price, discount, sale_amount: saleAmount, payment_status: form.payment, signature_data: form.signature || null, sale_type: form.saleType || 'Sale', old_vehicle_name: form.oldVehicleName || '', old_vehicle_registration: form.oldVehicleRegistration || '', exchange_value: exchangeValue, exchange_discount: exchangeDiscount, emi_amount: form.emiAmount ? Number(form.emiAmount) : null, tenure_months: form.tenureMonths ? Number(form.tenureMonths) : null };
     const { data, error } = await supabase.from('sales').insert(sale).select().single();
     if (error) {
       setToast('Sale save nahi hui — pehle Supabase SQL tables/RLS check karo.');
