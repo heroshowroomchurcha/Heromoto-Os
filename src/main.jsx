@@ -19,6 +19,11 @@ const Icon = ({ name, size = 18 }) => {
     dots: <><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></>,
     calendar: <><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></>,
     check: <path d="m5 12 4 4L19 6"/>,
+    tag: <><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"/><path d="M7 7h.01"/></>,
+    card: <><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></>,
+    key: <><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></>,
+    box: <><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></>,
+    calc: <><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></>,
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 };
@@ -97,7 +102,7 @@ function App() {
   const [selectedModel, setSelectedModel] = useState(null);
   const [invoiceSale, setInvoiceSale] = useState(null);
   const [toast, setToast] = useState('');
-  const nav = [{ label: 'Overview', icon: 'grid' }, { label: 'Inventory', icon: 'bike' }, { label: 'Sales', icon: 'chart', count: sales.length }, { label: 'Finance', icon: 'chart', count: sales.filter(sale => sale.payment_status === 'Finance').length || undefined }, { label: 'Test drives', icon: 'bike', count: testDrives.filter(t => t.status !== 'Completed').length || '06' }, { label: 'Test ride inventory', icon: 'bike', count: testDriveInventory.length }, { label: 'RC tracker', icon: 'file', count: '08' }, { label: 'Customers', icon: 'users', count: customers.length || undefined }, { label: 'EMI calculator', icon: 'chart' }];
+  const nav = [{ label: 'Overview', icon: 'grid' }, { label: 'Inventory', icon: 'bike' }, { label: 'Sales', icon: 'tag', count: sales.length }, { label: 'Finance', icon: 'card', count: sales.filter(sale => sale.payment_status === 'Finance').length || undefined }, { label: 'Test drives', icon: 'key', count: testDrives.filter(t => t.status !== 'Completed').length || '06' }, { label: 'Test ride inventory', icon: 'box', count: testDriveInventory.length }, { label: 'RC tracker', icon: 'file', count: '08' }, { label: 'Customers', icon: 'users', count: customers.length || undefined }, { label: 'EMI calculator', icon: 'calc' }];
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 60000);
