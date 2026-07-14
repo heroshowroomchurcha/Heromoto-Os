@@ -40,16 +40,7 @@ const dateLabel = value => new Date(value).toLocaleDateString('en-IN', { day: '2
 const greetingForHour = hour => hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 21 ? 'Good evening' : 'Good night';
 const dashboardDateLabel = value => value.toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase();
 
-async function sendCustomerSms(payload) {
-  if (!payload.phone) {
-    window.dispatchEvent(new CustomEvent('rideflow:sms-failed', { detail: 'Status save ho gaya, lekin customer phone number missing hai.' }));
-    return false;
-  }
-  const { data, error } = await supabase.functions.invoke('send-sms', { body: payload });
-  if (!error && data?.success === true) return true;
-  window.dispatchEvent(new CustomEvent('rideflow:sms-failed', { detail: data?.error || error?.message || 'Status save ho gaya, lekin SMS send nahi hua. Renflair API key/function check karo.' }));
-  return false;
-}
+
 
 async function uploadCustomerDocument(file, customerId, kind, userId) {
   if (!file) return null;
@@ -268,7 +259,6 @@ function App() {
     setActive('Overview');
     setInvoiceSale({ sale: { ...linkedSale, sale_date: linkedSale.sale_date || new Date().toISOString() }, vehicle, customer: { name: form.customer, phone: form.phone, ...kyc, ...documentPaths }, saleAmount, discount, signature: form.signature });
     setToast(`${vehicle.model} sale saved — ${money(saleAmount)} dashboard mein sync ho gaya.`);
-    sendCustomerSms({ kind: 'sale', phone: form.phone, customerName: form.customer, orderId: linkedSale.id, vehicleName: sale.vehicle_name, amount: saleAmount }).then(sent => { if (sent) setToast(`Sale saved + premium message sent to ${form.customer}.`); });
     setTimeout(() => setToast(''), 5000);
   }
 
@@ -331,9 +321,6 @@ function App() {
           if (!error) {
             setRcRecords(current => current.map(item => item.id === record.id ? { ...item, status } : item));
             setToast(`RC status updated: ${status}`);
-            sendCustomerSms({ kind: 'rc_status', phone: record.customer_phone, customerName: record.customer_name, orderId: record.sale_id, rcStatus: status }).then(sent => {
-              if (sent) setToast(`RC ${status} update sent to ${record.customer_name}.`);
-            });
             setTimeout(() => setToast(''), 5000);
           }
         }} />
@@ -768,7 +755,25 @@ function TestRideInventoryWorkspace({ vehicles, onChange, onToast }) {
 
 
 function RCTracker({ records, onStatusChange }) {
-  return <section className="rc-layout"><div className="rc-header"><div><p className="eyebrow">LINKED TO SALES</p><h2>RC applications</h2><p>Har sold bike ka RC record yahan automatically create hota hai.</p></div><div className="rc-summary"><b>{records.filter(r => r.status === 'Completed').length}</b><span>completed</span><b>{records.filter(r => r.status !== 'Completed').length}</b><span>open</span></div></div>{records.length ? <div className="panel rc-table"><div className="table-head rc-table-head"><span>Customer</span><span>Vehicle</span><span>Sale link</span><span>Status</span><span>Update</span></div>{records.map((record, index) => <div className="rc-row" key={record.id || index}><div className="customer"><div className="avatar" style={{background:['#e8d4ce','#dce3d3','#d9dcea','#e8e0cc'][index % 4]}}>{String(record.customer_name || 'NK').split(' ').map(x => x[0]).join('').slice(0,2)}</div><b>{record.customer_name}</b></div><span className="muted">{record.vehicle_name}</span><span className="sale-link"><i/> Sale #{record.sale_id}</span><span className={`status ${record.status === 'Completed' ? 'success' : record.status === 'Submitted' ? 'info' : 'warning'}`}><i/>{record.status}</span><select value={record.status} onChange={e => onStatusChange(record, e.target.value)}><option>Pending</option><option>Submitted</option><option>Processing</option><option>Completed</option></select></div>)}</div> : <div className="panel placeholder-panel"><div className="empty-icon"><Icon name="file" size={27}/></div><h2>No RC applications yet</h2><p>Inventory se bike sell karte hi linked RC application yahan dikhega.</p></div>}</section>;
+  const [tab, setTab] = useState('Open');
+  const openRecords = records.filter(r => r.status !== 'Completed');
+  const completedRecords = records.filter(r => r.status === 'Completed');
+  const shown = tab === 'Open' ? openRecords : completedRecords;
+
+  return <section className="rc-layout">
+    <div className="workspace-tabs-group" style={{marginBottom: '24px'}}>
+      <div className="workspace-tabs">
+        <button className={tab === 'Open' ? 'active' : ''} onClick={() => setTab('Open')}>Open <em>{openRecords.length}</em></button>
+        <button className={tab === 'Completed' ? 'active' : ''} onClick={() => setTab('Completed')}>Completed <em>{completedRecords.length}</em></button>
+      </div>
+    </div>
+    <div className="rc-header">
+      <div><p className="eyebrow">LINKED TO SALES</p><h2>RC applications</h2><p>Har sold bike ka RC record yahan automatically create hota hai.</p></div>
+      <div className="rc-summary"><b>{completedRecords.length}</b><span>completed</span><b>{openRecords.length}</b><span>open</span></div>
+    </div>
+    {shown.length ? <div className="panel rc-table"><div className="table-head rc-table-head"><span>Customer</span><span>Vehicle</span><span>Sale link</span><span>Status</span><span>Update</span></div>{shown.map((record, index) => <div className="rc-row" key={record.id || index}><div className="customer"><div className="avatar" style={{background:['#e8d4ce','#dce3d3','#d9dcea','#e8e0cc'][index % 4]}}>{String(record.customer_name || 'NK').split(' ').map(x => x[0]).join('').slice(0,2)}</div><b>{record.customer_name}</b></div><span className="muted">{record.vehicle_name}</span><span className="sale-link"><i/> Sale #{record.sale_id}</span><span className={`status ${record.status === 'Completed' ? 'success' : record.status === 'Submitted' ? 'info' : 'warning'}`}><i/>{record.status}</span><select value={record.status} onChange={e => onStatusChange(record, e.target.value)}><option>Pending</option><option>Submitted</option><option>Processing</option><option>Completed</option></select></div>)}</div>
+    : <div className="panel placeholder-panel"><div className="empty-icon"><Icon name="file" size={27}/></div><h2>{tab === 'Open' ? 'Koi pending RC nahi' : 'Koi completed RC nahi'}</h2><p>{tab === 'Open' ? 'Saari RC applications complete ho gayi hain.' : 'Abhi tak koi RC complete nahi hua.'}</p></div>}
+  </section>;
 }
 
 function SignaturePad({ value, onChange }) {
