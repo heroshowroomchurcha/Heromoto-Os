@@ -51,6 +51,7 @@
 
 /* Typography and surface polish */
 .mobile-brand { display: none; }
+.topbar-brand { display: flex; align-items: center; }
 button,input,select{font-family:inherit}
 .nav-item,.primary-button,.dark-button,.sell-button{transition:background .18s ease,color .18s ease,transform .18s ease,box-shadow .18s ease}
 .nav-item:hover{background:#eeefeb;color:var(--ink)}
