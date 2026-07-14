@@ -97,12 +97,13 @@ function App() {
   const [rcRecords, setRcRecords] = useState([]);
   const [testDrives, setTestDrives] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [pendingDues, setPendingDues] = useState([]);
   const [showTestDriveModal, setShowTestDriveModal] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [selectedModel, setSelectedModel] = useState(null);
   const [invoiceSale, setInvoiceSale] = useState(null);
   const [toast, setToast] = useState('');
-  const nav = [{ label: 'Overview', icon: 'grid' }, { label: 'Inventory', icon: 'bike' }, { label: 'Sales', icon: 'tag', count: sales.length }, { label: 'Test drives', icon: 'key', count: testDrives.filter(t => t.status !== 'Completed').length || '06' }, { label: 'Test ride inventory', icon: 'box', count: testDriveInventory.length }, { label: 'Number plate', icon: 'file', count: '08' }, { label: 'Customers', icon: 'users', count: customers.length || undefined }, { label: 'EMI calculator', icon: 'calc' }];
+  const nav = [{ label: 'Overview', icon: 'grid' }, { label: 'Inventory', icon: 'bike' }, { label: 'Sales', icon: 'tag', count: sales.length }, { label: 'Test drives', icon: 'key', count: testDrives.filter(t => t.status !== 'Completed').length || '06' }, { label: 'Test ride inventory', icon: 'box', count: testDriveInventory.length }, { label: 'Number plate', icon: 'file', count: '08' }, { label: 'Customers', icon: 'users', count: customers.length || undefined }, { label: 'Pending dues', icon: 'file', count: pendingDues.filter(d => d.status === 'Pending').length || undefined }, { label: 'EMI calculator', icon: 'calc' }];
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 60000);
@@ -139,13 +140,14 @@ function App() {
     if (!session?.user?.id) return;
     let mounted = true;
     async function load() {
-      const [{ data: inv }, { data: tdInv }, { data: saleRows }, { data: rcRows }, { data: driveRows }, { data: customerRows }] = await Promise.all([
+      const [{ data: inv }, { data: tdInv }, { data: saleRows }, { data: rcRows }, { data: driveRows }, { data: customerRows }, { data: duesRows }] = await Promise.all([
         supabase.from('inventory').select('*').order('model'),
         supabase.from('test_drive_inventory').select('*').order('model'),
         supabase.from('sales').select('*').order('sale_date', { ascending: false }).limit(12),
         supabase.from('rc_records').select('*').order('created_at', { ascending: false }).limit(30),
         supabase.from('test_drives').select('*').order('scheduled_at', { ascending: true }).limit(30),
         supabase.from('customers').select('*').order('created_at', { ascending: false }).limit(100),
+        supabase.from('pending_dues').select('*').order('created_at', { ascending: false }).limit(50),
       ]);
       if (mounted) {
         if (inv) setInventory(inv);
@@ -154,6 +156,7 @@ function App() {
         if (rcRows) setRcRecords(rcRows);
         if (driveRows) setTestDrives(driveRows);
         if (customerRows) setCustomers(customerRows);
+        if (duesRows) setPendingDues(duesRows);
       }
       
       // Temporary cleanup for duplicate Arjun Mehta records
@@ -250,7 +253,7 @@ function App() {
   const visibleNav = nav;
   return <div className="app-shell"><aside className="sidebar"><div className="brand"><div className="brand-mark">R</div><div><strong>rideflow</strong><span>SHOWROOM OS</span></div></div><div className="branch-select"><span className="online-dot"/> Hero MotoCorp <b>·</b> Andheri <Icon name="arrow" size={13}/></div><nav>{visibleNav.map(item => <button key={item.label} className={active === item.label ? 'nav-item active' : 'nav-item'} onClick={() => setActive(item.label)}><Icon name={item.icon}/><span>{item.label}</span>{item.count && <em>{item.count}</em>}</button>)}</nav><div className="sidebar-bottom"><div className="sync"><span className="pulse"/><div><b>Supabase synced</b><small>{isOwner ? 'Owner access · Secure' : 'Staff access · Limited'}</small></div></div><button className="user-row" onClick={() => supabase.auth.signOut()}><div className="avatar me">{(profile?.full_name || session.user.email || 'NK').slice(0,2).toUpperCase()}</div><div><b>{profile?.full_name || session.user.email}</b><small>{isOwner ? 'Showroom owner' : 'Showroom staff'} · Sign out</small></div><Icon name="dots" size={16}/></button></div></aside>
     <main className="main-content"><header className="topbar"><div className="breadcrumb"><div className="mobile-brand"><div className="brand-mark">R</div><strong>rideflow</strong></div></div><div className="top-actions"><label className="search"><Icon name="search" size={17}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search vehicles, customers..."/></label><button className="icon-button" onClick={() => { setToast('No new notifications'); setTimeout(() => setToast(''), 3000); }}><Icon name="bell"/></button><button className="primary-button" onClick={() => setActive('Inventory')}><Icon name="plus" size={17}/> New sale</button></div></header><div className="content-wrap"><section className="page-heading"><div><p className="eyebrow">{dashboardDateLabel(clock)} <span className="live"><i/> LIVE</span></p><h1>{active === 'Overview' ? `${greetingForHour(clock.getHours())}, Nihal.` : active}</h1><p className="subcopy">{active === 'Overview' ? 'Your showroom numbers, inventory and follow-ups in one view.' : active === 'Inventory' ? 'Show customers every available bike, price and offer limit.' : `Manage your ${active.toLowerCase()} records from one place.`}</p></div><button className="date-button"><Icon name="calendar" size={16}/> Supabase live <span className="live-dot"/></button></section>
-      {active === 'Overview' ? <Overview sales={sales} inventory={inventory} monthlySales={monthlySales} stockTotal={stockTotal} setActive={setActive} /> : active === 'Inventory' ? selectedModel ? <VehicleDetail vehicle={selectedModel} onBack={() => setSelectedModel(null)} onSell={() => setSelectedVehicle(selectedModel)} /> : <Inventory vehicles={filteredInventory} onSell={setSelectedVehicle} onDetails={setSelectedModel} /> : active === 'Test drives' ? <TestDrives drives={testDrives} vehicles={testDriveInventory} onAdd={() => setShowTestDriveModal(true)} onStatusChange={async (drive, status) => { const { error } = await supabase.from('test_drives').update({ status }).eq('id', drive.id); if (!error) { setTestDrives(current => current.map(item => item.id === drive.id ? { ...item, status } : item)); setToast(`Test drive status updated: ${status}`); setTimeout(() => setToast(''), 4000); } }} /> : active === 'Number plate' ? <RCTracker records={visibleRcRecords} onStatusChange={async (record, status) => { if (String(record.id).startsWith('sale-rc-')) { setToast('Is sale ka RC Supabase mein create karne ke liye setup.sql policies run karo.'); setTimeout(() => setToast(''), 4000); return; } const { error } = await supabase.from('rc_records').update({ status, ...(status === 'Completed' ? { completed_at: new Date().toISOString() } : {}) }).eq('id', record.id); if (!error) { setRcRecords(current => current.map(item => item.id === record.id ? { ...item, status } : item)); setToast(`RC status updated: ${status}`); sendCustomerSms({ kind: 'rc_status', phone: record.customer_phone, customerName: record.customer_name, orderId: record.sale_id, rcStatus: status }).then(sent => { if (sent) setToast(`RC ${status} update sent to ${record.customer_name}.`); }); setTimeout(() => setToast(''), 5000); } }} /> : active === 'Customers' ? <Customers records={visibleCustomers} /> : active === 'Sales' ? <SalesWorkspace sales={sales} userId={session.user.id} onChange={setSales} onToast={setToast} /> : active === 'Test ride inventory' ? <TestRideInventoryWorkspace vehicles={testDriveInventory} onChange={setTestDriveInventory} onToast={setToast} /> : active === 'EMI calculator' ? <EMIWorkspace defaultAmount={inventory[0]?.on_road_price || 100000} /> : <section className="placeholder-panel panel"><div className="empty-icon"><Icon name="chart" size={27}/></div><h2>{active} workspace ready</h2><p>Database connected. Is module ka next workflow yahan manage hoga.</p><button className="primary-button" onClick={() => setActive('Inventory')}><Icon name="bike" size={17}/> Open inventory</button></section>}
+      {active === 'Overview' ? <Overview sales={sales} inventory={inventory} monthlySales={monthlySales} stockTotal={stockTotal} setActive={setActive} /> : active === 'Inventory' ? selectedModel ? <VehicleDetail vehicle={selectedModel} onBack={() => setSelectedModel(null)} onSell={() => setSelectedVehicle(selectedModel)} /> : <Inventory vehicles={filteredInventory} onSell={setSelectedVehicle} onDetails={setSelectedModel} /> : active === 'Test drives' ? <TestDrives drives={testDrives} vehicles={testDriveInventory} onAdd={() => setShowTestDriveModal(true)} onStatusChange={async (drive, status) => { const { error } = await supabase.from('test_drives').update({ status }).eq('id', drive.id); if (!error) { setTestDrives(current => current.map(item => item.id === drive.id ? { ...item, status } : item)); setToast(`Test drive status updated: ${status}`); setTimeout(() => setToast(''), 4000); } }} /> : active === 'Number plate' ? <RCTracker records={visibleRcRecords} onStatusChange={async (record, status) => { if (String(record.id).startsWith('sale-rc-')) { setToast('Is sale ka RC Supabase mein create karne ke liye setup.sql policies run karo.'); setTimeout(() => setToast(''), 4000); return; } const { error } = await supabase.from('rc_records').update({ status, ...(status === 'Completed' ? { completed_at: new Date().toISOString() } : {}) }).eq('id', record.id); if (!error) { setRcRecords(current => current.map(item => item.id === record.id ? { ...item, status } : item)); setToast(`RC status updated: ${status}`); sendCustomerSms({ kind: 'rc_status', phone: record.customer_phone, customerName: record.customer_name, orderId: record.sale_id, rcStatus: status }).then(sent => { if (sent) setToast(`RC ${status} update sent to ${record.customer_name}.`); }); setTimeout(() => setToast(''), 5000); } }} /> : active === 'Customers' ? <Customers records={visibleCustomers} /> : active === 'Sales' ? <SalesWorkspace sales={sales} userId={session.user.id} onChange={setSales} onToast={setToast} /> : active === 'Test ride inventory' ? <TestRideInventoryWorkspace vehicles={testDriveInventory} onChange={setTestDriveInventory} onToast={setToast} /> : active === 'EMI calculator' ? <EMIWorkspace defaultAmount={inventory[0]?.on_road_price || 100000} /> : active === 'Pending dues' ? <PendingDuesWorkspace dues={pendingDues} onChange={setPendingDues} onToast={setToast} /> : <section className="placeholder-panel panel"><div className="empty-icon"><Icon name="chart" size={27}/></div><h2>{active} workspace ready</h2><p>Database connected. Is module ka next workflow yahan manage hoga.</p><button className="primary-button" onClick={() => setActive('Inventory')}><Icon name="bike" size={17}/> Open inventory</button></section>}
     </div></main>
     {selectedVehicle && <SaleModal vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} onSave={completeSale} />}
     {invoiceSale && <InvoiceModal record={invoiceSale} onClose={() => setInvoiceSale(null)} />}
@@ -474,6 +477,118 @@ function InvoiceModal({ record, onClose }) {
     window.open(`https://wa.me/${phone}?text=${text}`, '_blank', 'noopener,noreferrer');
   }
   return <div className="modal-backdrop invoice-backdrop" onClick={onClose}><div className="invoice-sheet" onClick={e => e.stopPropagation()}><div className="invoice-actions"><button className="ghost-button" onClick={onClose}>Close</button><button className="ghost-button" disabled={pdfBusy} onClick={shareWhatsApp}>Send on WhatsApp</button><button className="primary-button" disabled={pdfBusy} onClick={downloadPdf}>{pdfBusy ? 'Preparing PDF…' : 'Download PDF'}</button></div><div className="invoice-paper" ref={invoiceRef}><div className="invoice-top"><div><div className="invoice-brand"><span>R</span><div><b>rideflow</b><small>SHOWROOM OS</small></div></div><p>Hero MotoCorp · Andheri West<br/>Mumbai, Maharashtra · +91 22 4000 2026</p></div><div className="invoice-meta"><small>TAX INVOICE</small><strong>{invoiceNo}</strong><span>{dateLabel(sale.sale_date)} · {new Date(sale.sale_date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span></div></div><div className="invoice-rule"/><div className="invoice-parties"><div><small>BILLED TO</small><b>{customer.name}</b><span>{customer.phone || 'Phone not added'}</span><span>Aadhaar · •••• {customer.aadhaar_last4 || 'Not added'}</span><span>PAN · {customer.pan_masked || 'Not added'}</span></div><div><small>VEHICLE DETAILS</small><b>{vehicle.model}</b><span>{vehicle.variant} · {vehicle.cc || '—'} cc</span><span>Colour · {vehicle.color}</span></div></div><div className="invoice-items"><div className="invoice-item invoice-item-head"><span>DESCRIPTION</span><span>AMOUNT</span></div><div className="invoice-item"><span><b>{vehicle.model} {vehicle.variant}</b><small>On-road vehicle price</small></span><strong>{money(vehicle.on_road_price || vehicle.ex_showroom_price)}</strong></div><div className="invoice-item discount-row"><span>Showroom discount</span><strong>− {money(discount)}</strong></div></div><div className="invoice-total"><span>Total payable</span><strong>{money(saleAmount)}</strong></div><div className="invoice-footer"><div><b>Thank you for choosing Hero MotoCorp.</b><span>RC application has been linked to this sale.</span></div><div>{signature && <div className="invoice-signature"><img src={signature} alt="Customer digital signature"/><small>Digitally signed by customer</small></div>}<small>PAYMENT STATUS</small><strong>{sale.payment_status || 'Pending'}</strong></div></div></div></div></div>;
+}
+
+function PricingModal({ vehicle, isEmi, onClose }) {
+  return <div className="modal-backdrop" onClick={onClose}><div className="sale-modal" onClick={e => e.stopPropagation()}><div className="modal-head"><h2>{isEmi ? 'EMI finance breakdown' : 'Pricing breakdown'}</h2><button className="icon-button" onClick={onClose}><Icon name="x" size={20}/></button></div><div className="modal-body pricing-rows"><div className="pricing-row"><span>Ex-showroom price</span><strong>{money(vehicle.ex_showroom_price)}</strong></div><div className="pricing-row"><span>RTO + Insurance + PDI</span><strong>{money(vehicle.on_road_price - vehicle.ex_showroom_price)}</strong></div><div className="pricing-row"><span>Accessories kit</span><strong>Included</strong></div><div className="pricing-row total-row"><span>Total on-road price</span><strong>{money(vehicle.on_road_price)}</strong></div><p className="pricing-note">Subject to change. Validity: 15 days.</p></div></div></div>;
+}
+
+function PendingDuesWorkspace({ dues, onChange, onToast }) {
+  const [tab, setTab] = useState('Pending');
+  const [showAdd, setShowAdd] = useState(false);
+  
+  const visibleDues = dues.filter(d => d.status === tab);
+  
+  async function clearDue(due) {
+    const confirmation = window.confirm(`Is ${due.customer_name} ka ₹${due.amount} udhaar clear ho gaya hai?`);
+    if (!confirmation) return;
+    const { data, error } = await supabase.from('pending_dues').update({ status: 'Cleared' }).eq('id', due.id).select().single();
+    if (error) { onToast?.(`Error clearing due: ${error.message}`); return; }
+    onChange(dues.map(d => d.id === due.id ? data : d));
+    onToast?.(`Udhaar cleared for ${due.customer_name}!`);
+  }
+
+  return <section className="sales-workspace">
+    <div className="sales-workspace-head">
+      <div>
+        <p className="eyebrow">STORE CREDITS</p>
+        <h2>Pending dues (Udhaar)</h2>
+        <p>Track informal store credits and customer dues here.</p>
+      </div>
+      <div className="workspace-tabs-group">
+        <div className="workspace-tabs">
+          <button className={tab === 'Pending' ? 'active' : ''} onClick={() => setTab('Pending')}>Pending</button>
+          <button className={tab === 'Cleared' ? 'active' : ''} onClick={() => setTab('Cleared')}>Cleared</button>
+        </div>
+        <button className="primary-button" onClick={() => setShowAdd(true)}><Icon name="plus" size={16}/> New udhaar</button>
+      </div>
+    </div>
+    {visibleDues.length ? <div className="panel sales-records">
+      <div className="table-head sales-record-head" style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
+        <span>Customer</span>
+        <span>Amount due</span>
+        <span>Status</span>
+        <span></span>
+      </div>
+      {visibleDues.map((due, index) => <div className="sales-record-row" key={due.id} style={{ gridTemplateColumns: '2fr 1fr 1fr 1fr' }}>
+        <div className="customer">
+          <div className="avatar" style={{background:['#e8d4ce','#dce3d3','#d9dcea','#e8e0cc'][index % 4]}}>
+            {String(due.customer_name || 'NK').split(' ').map(x => x[0]).join('').slice(0,2)}
+          </div>
+          <div>
+            <b>{due.customer_name}</b>
+            <small>{due.customer_phone || 'No phone added'}</small>
+          </div>
+        </div>
+        <strong>{money(due.amount)}</strong>
+        <span className={due.status === 'Pending' ? 'status warning' : 'status success'}><i/>{due.status}</span>
+        <div className="sale-row-actions">
+          {due.status === 'Pending' && <button className="outline-button" style={{padding: '5px 10px', margin: 0, width: 'auto'}} onClick={() => clearDue(due)}>Clear Udhaar</button>}
+        </div>
+      </div>)}
+    </div> : <div className="panel placeholder-panel">
+      <div className="empty-icon"><Icon name="file" size={27}/></div>
+      <h2>No {tab.toLowerCase()} dues</h2>
+      <p>Aapka udhaar record yahan aayega.</p>
+    </div>}
+    {showAdd && <PendingDuesModal onClose={() => setShowAdd(false)} onSave={async (values) => {
+      const { data, error } = await supabase.from('pending_dues').insert([values]).select().single();
+      if (error) { onToast?.(`Error adding due: ${error.message}`); return; }
+      onChange([data, ...dues]);
+      onToast?.('New udhaar added successfully.');
+      setShowAdd(false);
+    }} />}
+  </section>;
+}
+
+function PendingDuesModal({ onClose, onSave }) {
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState({ customer_name: '', customer_phone: '', amount: '' });
+  
+  async function submit(e) {
+    e.preventDefault();
+    setBusy(true);
+    await onSave({
+      customer_name: form.customer_name.trim(),
+      customer_phone: form.customer_phone.trim(),
+      amount: Number(form.amount)
+    });
+    setBusy(false);
+  }
+
+  return <div className="modal-backdrop" onClick={onClose}>
+    <div className="sale-modal" style={{maxWidth: '400px'}} onClick={e => e.stopPropagation()}>
+      <div className="modal-head">
+        <h2>Add pending due</h2>
+        <button className="icon-button" onClick={onClose}><Icon name="x" size={20}/></button>
+      </div>
+      <form className="modal-body" onSubmit={submit}>
+        <div className="form-row">
+          <label>Customer name <input autoFocus required placeholder="Rahul Sharma" value={form.customer_name} onChange={e => setForm({...form, customer_name: e.target.value})} /></label>
+        </div>
+        <div className="form-row">
+          <label>Phone number <input type="tel" placeholder="9876543210" value={form.customer_phone} onChange={e => setForm({...form, customer_phone: e.target.value})} /></label>
+        </div>
+        <div className="form-row">
+          <label>Amount (₹) <input type="number" required min="1" placeholder="500" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} /></label>
+        </div>
+        <div className="modal-foot" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+          <button type="button" className="outline-button" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
+          <button type="submit" className="primary-button" disabled={busy} style={{ flex: 1 }}>{busy ? 'Saving...' : 'Save Udhaar'}</button>
+        </div>
+      </form>
+    </div>
+  </div>;
 }
 
 const Metric = ({ label, value, delta, foot, accent }) => { const type = label === 'MONTHLY SALES' ? 'sales-chart' : label === 'UNITS SOLD' ? 'units-chart' : label === 'AVAILABLE STOCK' ? 'stock-chart' : 'rc-chart'; return <div className="metric"><p className="eyebrow">{label}</p><div className="metric-main"><strong>{value}</strong><span className={accent === 'amber' ? 'metric-delta amber' : 'metric-delta'}>{delta}</span></div><span className="muted">{foot}</span>{type === 'sales-chart' && <div className="metric-chart sales-chart"><svg viewBox="0 0 120 38" preserveAspectRatio="none"><path className="chart-area" d="M2 32 L18 25 L32 28 L47 17 L62 21 L78 9 L94 14 L108 4 L118 8 L118 38 L2 38 Z"/><path className="chart-line" d="M2 32 L18 25 L32 28 L47 17 L62 21 L78 9 L94 14 L108 4 L118 8"/></svg><span>7-day sales</span></div>}{type === 'units-chart' && <div className="metric-chart units-chart"><div className="units-bars"><i/><i/><i/><i/><i/><i/><i/></div><span>units moved</span></div>}{type === 'stock-chart' && <div className="metric-chart stock-chart"><div className="stock-ring"><b>LIVE</b></div><span>available now</span></div>}{type === 'rc-chart' && <div className="metric-chart rc-chart"><div className="rc-track"><i/></div><span>needs attention</span></div>}</div>; };
