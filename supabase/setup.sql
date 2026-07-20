@@ -261,4 +261,18 @@ drop policy if exists "MVP read second hand inventory" on public.second_hand_inv
 drop policy if exists "MVP write second hand inventory" on public.second_hand_inventory;
 create policy "MVP read second hand inventory" on public.second_hand_inventory for select to authenticated using (true);
 create policy "MVP write second hand inventory" on public.second_hand_inventory for all to authenticated using (true) with check (true);
+
+-- Showroom settings (for signature, etc)
+create table if not exists public.showroom_settings (
+  id integer primary key default 1 check (id = 1),
+  owner_signature text,
+  updated_at timestamptz default now()
+);
+alter table public.showroom_settings enable row level security;
+drop policy if exists "Anyone can read showroom_settings" on public.showroom_settings;
+drop policy if exists "Owners can update showroom_settings" on public.showroom_settings;
+create policy "Anyone can read showroom_settings" on public.showroom_settings for select to authenticated using (true);
+create policy "Owners can update showroom_settings" on public.showroom_settings for all to authenticated using (exists(select 1 from public.profiles where id = auth.uid() and role = 'owner'));
+
+insert into public.showroom_settings (id) values (1) on conflict do nothing;
 alter table if exists public.customers add column if not exists aadhaar_back_document_path text;
