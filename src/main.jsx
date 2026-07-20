@@ -188,7 +188,7 @@ function App() {
     if (!session?.user?.id) return;
     let mounted = true;
     async function load() {
-      const [{ data: inv }, { data: tdInv }, { data: shInv }, { data: saleRows }, { data: rcRows }, { data: driveRows }, { data: customerRows }, { data: duesRows }] = await Promise.all([
+      const [{ data: inv }, { data: tdInv }, { data: shInv }, { data: saleRows }, { data: rcRows }, { data: driveRows }, { data: customerRows }, { data: duesRows }, { data: settings }] = await Promise.all([
         supabase.from('inventory').select('*').order('model'),
         supabase.from('test_drive_inventory').select('*').order('model'),
         supabase.from('second_hand_inventory').select('*').order('model'),
