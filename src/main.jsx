@@ -919,7 +919,7 @@ function InvoiceModal({ record, onClose }) {
   let waBrand = 'Hero MotoCorp';
 
   if (isSecondHand) {
-    logoUrl = null;
+    logoUrl = '/hero.png';
     showroomSubText = 'RideFlow Showroom OS · Pre-owned Desk';
     thankYouText = 'Thank you for buying pre-owned with us.';
     rcText = 'Ownership transfer documents are being prepared.';
