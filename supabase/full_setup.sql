@@ -212,7 +212,8 @@ select * from (values
   ('Xtreme 160R', '4V', 160, 'Sports Red', 120000::numeric, 142600::numeric, 7000::numeric, 4),
   ('Maverick 440', 'Base', 440, 'Phantom Black', 199000::numeric, 248600::numeric, 10000::numeric, 2),
   ('Pleasure+', 'XTEC', 110, 'Pearl White', 72000::numeric, 92450::numeric, 3000::numeric, 6),
-  ('Glamour', 'Disc Brake', 125, 'Candy Red', 85000::numeric, 101500::numeric, 4000::numeric, 5)
+  ('Glamour', 'Disc Brake', 125, 'Candy Red', 85000::numeric, 101500::numeric, 4000::numeric, 5),
+  ('HF Deluxe', 'Flex', 97, 'Black Blue Yellow', 62000::numeric, 74500::numeric, 3000::numeric, 5)
 ) as seed(model, variant, cc, color, ex_showroom_price, on_road_price, max_discount, stock)
 where not exists (
   select 1 from public.inventory existing where existing.model = seed.model and existing.variant = seed.variant
