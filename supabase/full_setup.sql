@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS public.inventory (
   max_discount numeric,
   stock integer not null default 1,
   stock_by_color jsonb default '[]'::jsonb,
+  brand text default 'Hero',
   created_at timestamptz default now()
 );
 
