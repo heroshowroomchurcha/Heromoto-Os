@@ -261,3 +261,4 @@ drop policy if exists "MVP read second hand inventory" on public.second_hand_inv
 drop policy if exists "MVP write second hand inventory" on public.second_hand_inventory;
 create policy "MVP read second hand inventory" on public.second_hand_inventory for select to authenticated using (true);
 create policy "MVP write second hand inventory" on public.second_hand_inventory for all to authenticated using (true) with check (true);
+alter table if exists public.customers add column if not exists aadhaar_back_document_path text;

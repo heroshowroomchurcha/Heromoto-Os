@@ -1,0 +1,15 @@
+INSERT INTO second_hand_inventory (model, cc, color, price, registration_number, stock) VALUES
+('Honda Livo', 110, 'Grey', 40000, 'PENDING', 1),
+('Hero iSmart', 110, 'Red Black', 28000, 'PENDING', 1),
+('Bajaj Pulsar', 150, 'Black', 35000, 'PENDING', 1),
+('Bajaj Discover', 150, 'Black Blue', 20000, 'PENDING', 1),
+('Honda Dream Yuga', 110, 'Not specified', 26000, 'PENDING', 1),
+('Honda Unicorn', 160, 'Red', 35000, 'PENDING', 1),
+('Honda Shine', 100, 'Black (Red patti)', 45000, 'PENDING', 2),
+('Honda Shine', 100, 'Black Yellow', 45000, 'PENDING', 1),
+('Honda Shine', 125, 'Red Black (Red patti)', 36000, 'PENDING', 1),
+('Honda Shine', 125, 'Grey (White patti)', 42000, 'PENDING', 1),
+('Hero HF 100', 100, 'Black (Blue patti)', 60000, 'PENDING', 1),
+('Hero Glamour', 125, 'Blue', 80000, 'PENDING', 1),
+('Honda Shine BS6', 125, 'Black (Red patti)', 45000, 'PENDING', 1),
+('Hero Destini', 110, 'Black', 25000, 'PENDING', 1);
