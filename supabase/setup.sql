@@ -268,7 +268,7 @@ create table if not exists public.showroom_settings (
   owner_signature text,
   auto_backup_enabled boolean default false,
   auto_backup_key text,
-  auto_backup_time text default '20:00',
+  auto_backup_time text default '11:00',
   updated_at timestamptz default now()
 );
 alter table public.showroom_settings enable row level security;

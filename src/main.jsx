@@ -1088,7 +1088,7 @@ function OwnerSettingsModal({ onClose, onSignOut, currentSettings, currentSignat
   const [signature, setSignature] = useState(currentSignature || '');
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(currentSettings?.auto_backup_enabled || false);
   const [autoBackupKey, setAutoBackupKey] = useState(currentSettings?.auto_backup_key || '');
-  const [autoBackupTime, setAutoBackupTime] = useState(currentSettings?.auto_backup_time || '20:00');
+  const [autoBackupTime, setAutoBackupTime] = useState(currentSettings?.auto_backup_time || '11:00');
   const [saving, setSaving] = useState(false);
 
   async function save() {
