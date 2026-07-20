@@ -35,6 +35,11 @@ const fallbackTestDriveInventory = [];
 
 const fallbackSales = [];
 
+const fallbackSecondHandInventory = [
+  { id: 1, model: 'Splendor+ i3S', variant: 'Self Start Drum', cc: 100, color: 'Black with Purple', price: 42000, stock: 1, registration_number: 'MH02DU1234', km_driven: 18500, year_of_manufacture: 2021, status: 'Available' },
+  { id: 2, model: 'Glamour Disc', variant: 'Disc Brake', cc: 125, color: 'Techno Blue', price: 48000, stock: 1, registration_number: 'MH03ET5678', km_driven: 22000, year_of_manufacture: 2020, status: 'Available' }
+];
+
 const money = value => `₹ ${Number(value || 0).toLocaleString('en-IN')}`;
 const dateLabel = value => new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
 const greetingForHour = hour => hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : hour < 21 ? 'Good evening' : 'Good night';
@@ -95,6 +100,7 @@ function App() {
   const [query, setQuery] = useState('');
   const [inventory, setInventory] = useState(fallbackInventory);
   const [testDriveInventory, setTestDriveInventory] = useState(fallbackTestDriveInventory);
+  const [secondHandInventory, setSecondHandInventory] = useState(fallbackSecondHandInventory);
   const [sales, setSales] = useState(fallbackSales);
   const [rcRecords, setRcRecords] = useState([]);
   const [testDrives, setTestDrives] = useState([]);
@@ -141,9 +147,10 @@ function App() {
     if (!session?.user?.id) return;
     let mounted = true;
     async function load() {
-      const [{ data: inv }, { data: tdInv }, { data: saleRows }, { data: rcRows }, { data: driveRows }, { data: customerRows }, { data: duesRows }] = await Promise.all([
+      const [{ data: inv }, { data: tdInv }, { data: shInv }, { data: saleRows }, { data: rcRows }, { data: driveRows }, { data: customerRows }, { data: duesRows }] = await Promise.all([
         supabase.from('inventory').select('*').order('model'),
         supabase.from('test_drive_inventory').select('*').order('model'),
+        supabase.from('second_hand_inventory').select('*').order('model'),
         supabase.from('sales').select('*').order('sale_date', { ascending: false }).limit(12),
         supabase.from('rc_records').select('*').order('created_at', { ascending: false }).limit(30),
         supabase.from('test_drives').select('*').order('scheduled_at', { ascending: true }).limit(30),
@@ -153,6 +160,7 @@ function App() {
       if (mounted) {
         if (inv) setInventory(inv);
         if (tdInv) setTestDriveInventory(tdInv);
+        if (shInv) setSecondHandInventory(shInv);
         if (saleRows) setSales(saleRows);
         if (rcRows) setRcRecords(rcRows);
         if (driveRows) setTestDrives(driveRows);
@@ -207,10 +215,13 @@ function App() {
 
   async function completeSale(form) {
     const vehicle = selectedVehicle;
-    const discount = Math.min(Number(form.discount || 0), Number(vehicle.max_discount || 0));
+    const discount = vehicle.is_second_hand
+      ? Math.min(Number(form.discount || 0), Number(vehicle.price || 0))
+      : Math.min(Number(form.discount || 0), Number(vehicle.max_discount || 0));
     const exchangeValue = form.saleType === 'Exchange' ? Math.max(0, Number(form.exchangeValue || 0)) : 0;
     const exchangeDiscount = form.saleType === 'Exchange' ? Math.max(0, Number(form.exchangeDiscount || 0)) : 0;
-    const saleAmount = Math.max(0, Number(vehicle.on_road_price || vehicle.ex_showroom_price) - discount - exchangeValue - exchangeDiscount);
+    const basePrice = vehicle.is_second_hand ? vehicle.price : (vehicle.on_road_price || vehicle.ex_showroom_price);
+    const saleAmount = Math.max(0, Number(basePrice) - discount - exchangeValue - exchangeDiscount);
     const kyc = { aadhaar_last4: String(form.aadhaar || '').replace(/\D/g, '').slice(-4), pan_masked: form.pan ? `${String(form.pan).slice(0, 2).toUpperCase()}****${String(form.pan).slice(-2).toUpperCase()}` : '' };
     const { data: customerRow } = await supabase.from('customers').insert({ name: form.customer, phone: form.phone, ...kyc }).select().single();
     let documentPaths = {};
@@ -226,7 +237,29 @@ function App() {
         setToast(`Sale save ho rahi hai, lekin document upload fail hua: ${documentError.message}`);
       }
     }
-    const sale = { customer_id: customerRow?.id || null, customer_name: form.customer, customer_phone: form.phone, vehicle_id: vehicle.id, vehicle_name: `${vehicle.model} ${vehicle.variant || ''}`.trim(), vehicle_color: form.vehicleColor || vehicle.color, original_price: vehicle.on_road_price || vehicle.ex_showroom_price, discount, sale_amount: saleAmount, payment_status: form.payment, signature_data: form.signature || null, sale_type: form.saleType || 'Sale', old_vehicle_name: form.oldVehicleName || '', old_vehicle_registration: form.oldVehicleRegistration || '', exchange_value: exchangeValue, exchange_discount: exchangeDiscount, emi_amount: form.emiAmount ? Number(form.emiAmount) : null, tenure_months: form.tenureMonths ? Number(form.tenureMonths) : null, amount_paid: form.amountPaid };
+    const sale = { 
+      customer_id: customerRow?.id || null, 
+      customer_name: form.customer, 
+      customer_phone: form.phone, 
+      vehicle_id: vehicle.is_second_hand ? null : vehicle.id, 
+      vehicle_name: vehicle.is_second_hand 
+        ? `${vehicle.model} ${vehicle.variant || ''} (${vehicle.registration_number})`.trim() 
+        : `${vehicle.model} ${vehicle.variant || ''}`.trim(), 
+      vehicle_color: form.vehicleColor || vehicle.color, 
+      original_price: basePrice, 
+      discount, 
+      sale_amount: saleAmount, 
+      payment_status: form.payment, 
+      signature_data: form.signature || null, 
+      sale_type: form.saleType || 'Sale', 
+      old_vehicle_name: form.oldVehicleName || '', 
+      old_vehicle_registration: form.oldVehicleRegistration || '', 
+      exchange_value: exchangeValue, 
+      exchange_discount: exchangeDiscount, 
+      emi_amount: form.emiAmount ? Number(form.emiAmount) : null, 
+      tenure_months: form.tenureMonths ? Number(form.tenureMonths) : null, 
+      amount_paid: form.amountPaid 
+    };
     const { data, error } = await supabase.from('sales').insert(sale).select().single();
     if (error) {
       setToast('Sale save nahi hui — pehle Supabase SQL tables/RLS check karo.');
@@ -243,18 +276,25 @@ function App() {
       }
     }
     const { data: rcRow } = await supabase.from('rc_records').insert({ sale_id: linkedSale.id, customer_name: form.customer, customer_phone: form.phone, vehicle_name: sale.vehicle_name, status: 'Pending' }).select().single();
-    let newStock = Math.max(0, vehicle.stock - 1);
-    let newStockByColor = vehicle.stock_by_color || [];
-    if (newStockByColor.length > 0 && form.vehicleColor) {
-      newStockByColor = newStockByColor.map(item => item.color === form.vehicleColor ? { ...item, qty: Math.max(0, Number(item.qty) - 1) } : item);
-      newStock = newStockByColor.reduce((sum, item) => sum + Number(item.qty || 0), 0);
-    }
     
-    await supabase.from('inventory').update({ stock: newStock, stock_by_color: newStockByColor, status: newStock <= 0 ? 'Sold out' : 'Available' }).eq('id', vehicle.id);
+    if (vehicle.is_second_hand) {
+      await supabase.from('second_hand_inventory').update({ stock: 0, status: 'Sold' }).eq('id', vehicle.id);
+      setSecondHandInventory(current => current.map(item => item.id === vehicle.id ? { ...item, stock: 0, status: 'Sold' } : item));
+    } else {
+      let newStock = Math.max(0, vehicle.stock - 1);
+      let newStockByColor = vehicle.stock_by_color || [];
+      if (newStockByColor.length > 0 && form.vehicleColor) {
+        newStockByColor = newStockByColor.map(item => item.color === form.vehicleColor ? { ...item, qty: Math.max(0, Number(item.qty) - 1) } : item);
+        newStock = newStockByColor.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+      }
+      await supabase.from('inventory').update({ stock: newStock, stock_by_color: newStockByColor, status: newStock <= 0 ? 'Sold out' : 'Available' }).eq('id', vehicle.id);
+      setInventory(current => current.map(item => item.id === vehicle.id ? { ...item, stock: newStock, stock_by_color: newStockByColor } : item));
+    }
+
     setSales(current => [linkedSale, ...current]);
     setCustomers(current => [customerRow || { id: `local-${Date.now()}`, name: form.customer, phone: form.phone, ...kyc, created_at: new Date().toISOString(), last_vehicle: sale.vehicle_name, last_amount: saleAmount }, ...current]);
     setRcRecords(current => [rcRow || { id: Date.now(), sale_id: linkedSale.id, customer_name: form.customer, vehicle_name: sale.vehicle_name, status: 'Pending', created_at: new Date().toISOString() }, ...current]);
-    setInventory(current => current.map(item => item.id === vehicle.id ? { ...item, stock: newStock, stock_by_color: newStockByColor } : item));
+    
     setSelectedVehicle(null);
     setActive('Overview');
     setInvoiceSale({ sale: { ...linkedSale, sale_date: linkedSale.sale_date || new Date().toISOString() }, vehicle, customer: { name: form.customer, phone: form.phone, ...kyc, ...documentPaths }, saleAmount, discount, signature: form.signature });
@@ -297,12 +337,13 @@ function App() {
   if (session === undefined) return <div className="auth-loading"/>;
   if (!session) return <AuthScreen />;
   const isOwner = profile?.role === 'owner';
-  const nav = [{ label: 'Overview', icon: 'grid' }, { label: 'Inventory', icon: 'bike' }, { label: 'Sales', icon: 'tag', count: sales.length || undefined }, { label: 'Test drives', icon: 'key', count: testDrives.filter(t => t.status !== 'Completed').length || undefined }, { label: 'Number plate', icon: 'file', count: rcRecords.filter(r => r.status !== 'Completed').length || undefined }, { label: 'Customers', icon: 'users', count: visibleCustomers?.length || undefined }, { label: 'Pending dues', icon: 'file', count: pendingDues.filter(d => d.status === 'Pending').length || undefined }, { label: 'EMI calculator', icon: 'calc' }];
+  const nav = [{ label: 'Overview', icon: 'grid' }, { label: 'Inventory', icon: 'bike' }, { label: 'Second hand', icon: 'bike', count: secondHandInventory.filter(v => Number(v.stock) > 0).length || undefined }, { label: 'Sales', icon: 'tag', count: sales.length || undefined }, { label: 'Test drives', icon: 'key', count: testDrives.filter(t => t.status !== 'Completed').length || undefined }, { label: 'Number plate', icon: 'file', count: rcRecords.filter(r => r.status !== 'Completed').length || undefined }, { label: 'Customers', icon: 'users', count: visibleCustomers?.length || undefined }, { label: 'Pending dues', icon: 'file', count: pendingDues.filter(d => d.status === 'Pending').length || undefined }, { label: 'EMI calculator', icon: 'calc' }];
   const visibleNav = nav;
   return <div className="app-shell"><aside className="sidebar"><div className="brand"><div className="brand-mark">R</div><div><strong>rideflow</strong><span>SHOWROOM OS</span></div></div><div className="branch-select"><span className="online-dot"/> Hero MotoCorp <b>·</b> Andheri <Icon name="arrow" size={13}/></div><nav>{visibleNav.map(item => <button key={item.label} className={active === item.label ? 'nav-item active' : 'nav-item'} onClick={() => setActive(item.label)}><Icon name={item.icon}/><span>{item.label}</span>{item.count && <em>{item.count}</em>}</button>)}</nav><div className="sidebar-bottom"><div className="sync"><span className="pulse"/><div><b>Supabase synced</b><small>{isOwner ? 'Owner access · Secure' : 'Staff access · Limited'}</small></div></div><button className="user-row" onClick={() => supabase.auth.signOut()}><div className="avatar me">{(profile?.full_name || session.user.email || 'NK').slice(0,2).toUpperCase()}</div><div><b>{profile?.full_name || session.user.email}</b><small>{isOwner ? 'Showroom owner' : 'Showroom staff'} · Sign out</small></div><Icon name="dots" size={16}/></button></div></aside>
-    <main className="main-content"><header className="topbar"><div className="breadcrumb"><div className="topbar-brand"><img src="/hero.png" alt="Hero MotoCorp" style={{height:'56px', width:'auto', objectFit:'contain'}}/></div></div><div className="top-actions"><label className="search"><Icon name="search" size={17}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search vehicles, customers..."/></label><button className="icon-button" onClick={() => { setToast('No new notifications'); setTimeout(() => setToast(''), 3000); }}><Icon name="bell"/></button><button className="primary-button" onClick={() => setActive('Inventory')}><Icon name="plus" size={17}/> New sale</button></div></header><div className="content-wrap"><section className="page-heading"><div><p className="eyebrow">{dashboardDateLabel(clock)} <span className="live"><i/> LIVE</span></p><h1>{active === 'Overview' ? `${greetingForHour(clock.getHours())}, Nihal.` : active}</h1><p className="subcopy">{active === 'Overview' ? 'Your showroom numbers, inventory and follow-ups in one view.' : active === 'Inventory' ? 'Show customers every available bike, price and offer limit.' : `Manage your ${active.toLowerCase()} records from one place.`}</p></div><button className="date-button"><Icon name="calendar" size={16}/> Supabase live <span className="live-dot"/></button></section>
+    <main className="main-content"><header className="topbar"><div className="breadcrumb"><div className="topbar-brand"><img src="/hero.png" alt="Hero MotoCorp" style={{height:'56px', width:'auto', objectFit:'contain'}}/></div></div><div className="top-actions"><label className="search"><Icon name="search" size={17}/><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search vehicles, customers..."/></label><button className="icon-button" onClick={() => { setToast('No new notifications'); setTimeout(() => setToast(''), 3000); }}><Icon name="bell"/></button><button className="primary-button" onClick={() => setActive('Inventory')}><Icon name="plus" size={17}/> New sale</button></div></header><div className="content-wrap"><section className="page-heading"><div><p className="eyebrow">{dashboardDateLabel(clock)} <span className="live"><i/> LIVE</span></p><h1>{active === 'Overview' ? `${greetingForHour(clock.getHours())}, Nihal.` : active}</h1><p className="subcopy">{active === 'Overview' ? 'Your showroom numbers, inventory and follow-ups in one view.' : active === 'Inventory' ? 'Show customers every available bike, price and offer limit.' : active === 'Second hand' ? 'Manage pre-owned bikes, buyback from customers and sell them.' : `Manage your ${active.toLowerCase()} records from one place.`}</p></div><button className="date-button"><Icon name="calendar" size={16}/> Supabase live <span className="live-dot"/></button></section>
       {active === 'Overview' ? <Overview sales={filteredSales} inventory={inventory} monthlySales={monthlySales} stockTotal={stockTotal} rcRecords={filteredRcRecords} setActive={setActive} onDownloadBackup={downloadBackup} />
       : active === 'Inventory' ? selectedModel ? <VehicleDetail vehicle={selectedModel} onBack={() => setSelectedModel(null)} onSell={() => setSelectedVehicle(selectedModel)} /> : <Inventory vehicles={filteredInventory} onSell={setSelectedVehicle} onDetails={setSelectedModel} onManage={() => setActive('Inventory management')} />
+      : active === 'Second hand' ? <SecondHandInventoryWorkspace vehicles={secondHandInventory} onChange={setSecondHandInventory} onSell={setSelectedVehicle} onToast={setToast} />
       : active === 'Test drives' ? <TestDrivesWorkspace drives={filteredTestDrives} vehicles={testDriveInventory} onAdd={() => setShowTestDriveModal(true)} onStatusChange={async (drive, status) => {
           const { error } = await supabase.from('test_drives').update({ status }).eq('id', drive.id);
           if (!error) {
@@ -970,6 +1011,233 @@ function PendingDuesModal({ onClose, onSave }) {
       </form>
     </div>
   </div>;
+}
+
+function SecondHandInventoryWorkspace({ vehicles, onChange, onSell, onToast }) {
+  const blank = { model: '', variant: '', cc: '', color: '', registration_number: '', km_driven: '', year_of_manufacture: '', price: '', stock: 1 };
+  const [items, setItems] = useState(vehicles);
+  const [editing, setEditing] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState(blank);
+  const [query, setQuery] = useState('');
+
+  useEffect(() => setItems(vehicles), [vehicles]);
+
+  function notify(message) {
+    onToast?.(message);
+    window.setTimeout(() => onToast?.(''), 3500);
+  }
+
+  function openAdd() {
+    setEditing(null);
+    setForm(blank);
+    setShowForm(true);
+  }
+
+  function openEdit(vehicle) {
+    setEditing(vehicle);
+    setForm({
+      model: vehicle.model || '',
+      variant: vehicle.variant || '',
+      cc: vehicle.cc || '',
+      color: vehicle.color || '',
+      registration_number: vehicle.registration_number || '',
+      km_driven: vehicle.km_driven || '',
+      year_of_manufacture: vehicle.year_of_manufacture || '',
+      price: vehicle.price || '',
+      stock: vehicle.stock ?? 1,
+      file: null
+    });
+    setShowForm(true);
+  }
+
+  async function saveVehicle(event) {
+    event.preventDefault();
+    setBusy(true);
+    const payload = {
+      model: form.model.trim(),
+      variant: form.variant.trim(),
+      cc: Number(form.cc || 0),
+      color: form.color.trim(),
+      registration_number: form.registration_number.trim().toUpperCase(),
+      km_driven: Number(form.km_driven || 0),
+      year_of_manufacture: Number(form.year_of_manufacture || 0),
+      price: Number(form.price || 0),
+      stock: Math.max(0, Number(form.stock || 0)),
+      status: Math.max(0, Number(form.stock || 0)) > 0 ? 'Available' : 'Sold'
+    };
+
+    if (!payload.model || !payload.registration_number || !payload.price) {
+      notify('Model, Registration number, and Price are required.');
+      setBusy(false);
+      return;
+    }
+
+    let nextItem;
+    if (editing?.id && !String(editing.id).startsWith('local-')) {
+      if (form.file) {
+        try {
+          payload.image_url = await uploadVehicleImage(form.file, editing.id);
+        } catch(err) {
+          notify(`Image upload failed: ${err.message}`);
+          setBusy(false);
+          return;
+        }
+      }
+      const { data, error } = await supabase.from('second_hand_inventory').update(payload).eq('id', editing.id).select().single();
+      if (error) { notify(`Update failed: ${error.message}`); setBusy(false); return; }
+      nextItem = data;
+      const next = items.map(item => item.id === editing.id ? nextItem : item);
+      setItems(next); onChange?.(next);
+      notify('Pre-owned bike updated.');
+    } else if (editing) {
+      nextItem = { ...editing, ...payload };
+      const next = items.map(item => item.id === editing.id ? nextItem : item);
+      setItems(next); onChange?.(next);
+      notify('Pre-owned bike updated locally.');
+    } else {
+      const { data, error } = await supabase.from('second_hand_inventory').insert(payload).select().single();
+      if (error) { notify(`Add failed: ${error.message}`); setBusy(false); return; }
+      nextItem = data;
+      if (form.file) {
+        try {
+          const image_url = await uploadVehicleImage(form.file, nextItem.id);
+          await supabase.from('second_hand_inventory').update({ image_url }).eq('id', nextItem.id);
+          nextItem.image_url = image_url;
+        } catch(err) { notify('Added bike, but image upload failed'); }
+      }
+      const next = [nextItem, ...items];
+      setItems(next); onChange?.(next);
+      notify('Pre-owned bike added.');
+    }
+    setBusy(false);
+    setEditing(null);
+    setShowForm(false);
+  }
+
+  async function confirmRemove() {
+    if (!deleting) return;
+    setBusy(true);
+    const vehicle = deleting;
+    if (vehicle.id && !String(vehicle.id).startsWith('local-')) {
+      const { error } = await supabase.from('second_hand_inventory').delete().eq('id', vehicle.id);
+      if (error) { notify(`Delete failed: ${error.message}`); setBusy(false); return; }
+    }
+    const next = items.filter(item => item.id !== vehicle.id);
+    setItems(next); onChange?.(next); notify('Pre-owned bike removed.');
+    setBusy(false);
+    setDeleting(null);
+  }
+
+  const filtered = items.filter(v =>
+    `${v.model} ${v.variant} ${v.registration_number} ${v.color}`.toLowerCase().includes(query.toLowerCase())
+  );
+  const availableCount = items.filter(vehicle => Number(vehicle.stock || 0) > 0).length;
+
+  return (
+    <section className="test-ride-inventory" style={{paddingTop: 0, height: 'auto', flex: 1}}>
+      <div className="test-ride-inventory-head">
+        <div>
+          <p className="eyebrow">PRE-OWNED BIKES</p>
+          <h2>Second Hand Inventory</h2>
+          <p>Manage pre-owned bikes in showroom stock, buy from customers, and sell them.</p>
+        </div>
+        <div style={{display: 'flex', alignItems: 'center', gap: '16px'}}>
+          <label className="search" style={{height: '34px', margin: 0, width: '200px'}}>
+            <Icon name="search" size={15}/>
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search pre-owned..." style={{fontSize: '11px'}}/>
+          </label>
+          <div className="inventory-count">{availableCount} available · {items.length} total</div>
+          <button className="primary-button" onClick={openAdd}><Icon name="plus" size={15}/> Add Pre-owned Bike</button>
+        </div>
+      </div>
+
+      {filtered.length ? (
+        <div className="panel demo-fleet-grid">
+          {filtered.map((vehicle, index) => (
+            <div className="demo-fleet-row" key={vehicle.id || index} style={{gridTemplateColumns: '50px minmax(0,1fr) auto auto'}}>
+              <div className="demo-bike-mark" style={{width: '42px', height: '42px'}}>
+                {vehicle.image_url ? <img src={vehicle.image_url} style={{width:'100%', height:'100%', objectFit:'cover', borderRadius: '4px'}} alt=""/> : <Icon name="bike" size={24}/>}
+              </div>
+              <div>
+                <b style={{fontSize: '13px'}}>{vehicle.model} <span style={{fontWeight: 'normal', color: '#888', fontSize: '11px'}}>{vehicle.variant}</span></b>
+                <small style={{color: '#666', marginTop: '2px', fontSize: '10px'}}>
+                  Reg No: <b>{vehicle.registration_number}</b> · {vehicle.year_of_manufacture} YOM · {vehicle.km_driven?.toLocaleString()} km · {vehicle.cc} cc · {vehicle.color}
+                </small>
+              </div>
+              <div style={{textAlign: 'right', marginRight: '16px'}}>
+                <b style={{fontSize: '14px', color: '#1d2326'}}>{money(vehicle.price)}</b>
+                <small className={Number(vehicle.stock) > 0 ? 'status success' : 'status danger'} style={{marginTop: '4px'}}><i/>{Number(vehicle.stock) > 0 ? 'Available' : 'Sold'}</small>
+              </div>
+              <div className="demo-fleet-actions" style={{gap: '8px'}}>
+                {Number(vehicle.stock) > 0 && (
+                  <button className="sell-button" onClick={() => onSell({ ...vehicle, is_second_hand: true })} style={{padding: '7px 11px', fontSize: '10px'}}>Sell Bike</button>
+                )}
+                <button className="ghost-button compact-button" onClick={() => openEdit(vehicle)}>Edit</button>
+                <button className="ghost-button compact-button danger-button" onClick={() => setDeleting(vehicle)}>Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="panel placeholder-panel">
+          <h2>No pre-owned bikes found</h2>
+          <p>Add pre-owned bikes received from customer exchange or direct buyback to list them here.</p>
+          <button className="primary-button" onClick={openAdd}><Icon name="plus" size={15}/> Add first bike</button>
+        </div>
+      )}
+
+      {showForm && (
+        <div className="modal-backdrop" onClick={() => { setShowForm(false); setEditing(null); }}>
+          <form className="modal demo-inventory-modal" style={{maxWidth: '600px'}} onClick={event => event.stopPropagation()} onSubmit={saveVehicle}>
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">{editing ? 'UPDATE PRE-OWNED' : 'ADD PRE-OWNED'}</p>
+                <h2>{editing ? 'Edit Pre-owned Bike' : 'Add Pre-owned Bike'}</h2>
+              </div>
+              <button type="button" className="close" onClick={() => { setShowForm(false); setEditing(null); }}>×</button>
+            </div>
+            <div className="form-grid" style={{gridTemplateColumns: '1fr 1fr'}}>
+              <label>Model Name *<input value={form.model} onChange={event => setForm({ ...form, model: event.target.value })} placeholder="e.g. Splendor+ i3S" required/></label>
+              <label>Variant<input value={form.variant} onChange={event => setForm({ ...form, variant: event.target.value })} placeholder="e.g. Self Start Drum"/></label>
+              <label>Engine cc<input type="number" min="0" value={form.cc} onChange={event => setForm({ ...form, cc: event.target.value })} placeholder="e.g. 100"/></label>
+              <label>Colour<input value={form.color} onChange={event => setForm({ ...form, color: event.target.value })} placeholder="e.g. Black with Purple"/></label>
+              <label>Registration Number *<input value={form.registration_number} onChange={event => setForm({ ...form, registration_number: event.target.value })} placeholder="e.g. MH02DU1234" required/></label>
+              <label>Kilometers Driven<input type="number" min="0" value={form.km_driven} onChange={event => setForm({ ...form, km_driven: event.target.value })} placeholder="e.g. 18500"/></label>
+              <label>Year of Manufacture<input type="number" min="1900" max={new Date().getFullYear()} value={form.year_of_manufacture} onChange={event => setForm({ ...form, year_of_manufacture: event.target.value })} placeholder="e.g. 2021"/></label>
+              <label>Expected Price (₹) *<input type="number" min="0" value={form.price} onChange={event => setForm({ ...form, price: event.target.value })} placeholder="e.g. 45000" required/></label>
+              <label>Available Stock<select value={form.stock} onChange={event => setForm({ ...form, stock: Number(event.target.value) })}><option value="1">1 (Available)</option><option value="0">0 (Sold)</option></select></label>
+              <label>Upload Photo<input type="file" title=" " accept="image/*" onChange={e => setForm({...form, file: e.target.files[0]})}/></label>
+            </div>
+            <div className="modal-foot">
+              <button type="button" className="ghost-button" onClick={() => { setShowForm(false); setEditing(null); }}>Cancel</button>
+              <button className="primary-button" type="submit" disabled={busy}><Icon name="check" size={15}/> {editing ? 'Save changes' : 'Add bike'}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {deleting && (
+        <div className="modal-backdrop" onClick={() => setDeleting(null)}>
+          <div className="modal sale-modal" style={{maxWidth: '400px'}} onClick={e => e.stopPropagation()}>
+            <div className="modal-head">
+              <h2>Delete {deleting.model}?</h2>
+              <button className="icon-button" onClick={() => setDeleting(null)}><Icon name="x" size={20}/></button>
+            </div>
+            <div className="modal-body" style={{padding: '0 24px 24px'}}>
+              <p style={{margin: '0 0 20px', color: '#657487', fontSize: '14px', lineHeight: '1.5'}}>Are you sure you want to delete <b>{deleting.model}</b> ({deleting.registration_number}) from the pre-owned inventory? This action cannot be undone.</p>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <button type="button" className="ghost-button" onClick={() => setDeleting(null)} style={{ flex: 1 }}>Cancel</button>
+                <button type="button" disabled={busy} className="primary-button" style={{ flex: 1, background: '#d32f2f' }} onClick={confirmRemove}>{busy ? 'Deleting...' : 'Yes, Delete'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
 }
 
 const Metric = ({ label, value, delta, foot, accent }) => { const type = label === 'MONTHLY SALES' ? 'sales-chart' : label === 'UNITS SOLD' ? 'units-chart' : label === 'AVAILABLE STOCK' ? 'stock-chart' : 'rc-chart'; return <div className="metric"><p className="eyebrow">{label}</p><div className="metric-main"><strong>{value}</strong><span className={accent === 'amber' ? 'metric-delta amber' : 'metric-delta'}>{delta}</span></div><span className="muted">{foot}</span>{type === 'sales-chart' && <div className="metric-chart sales-chart"><svg viewBox="0 0 120 38" preserveAspectRatio="none"><path className="chart-area" d="M2 32 L18 25 L32 28 L47 17 L62 21 L78 9 L94 14 L108 4 L118 8 L118 38 L2 38 Z"/><path className="chart-line" d="M2 32 L18 25 L32 28 L47 17 L62 21 L78 9 L94 14 L108 4 L118 8"/></svg><span>7-day sales</span></div>}{type === 'units-chart' && <div className="metric-chart units-chart"><div className="units-bars"><i/><i/><i/><i/><i/><i/><i/></div><span>units moved</span></div>}{type === 'stock-chart' && <div className="metric-chart stock-chart"><div className="stock-ring"><b>LIVE</b></div><span>available now</span></div>}{type === 'rc-chart' && <div className="metric-chart rc-chart"><div className="rc-track"><i/></div><span>needs attention</span></div>}</div>; };
