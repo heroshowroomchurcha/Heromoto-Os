@@ -185,7 +185,34 @@ function App() {
           }
         }
         if (tdInv) setTestDriveInventory(tdInv);
-        if (shInv) setSecondHandInventory(shInv);
+        if (shInv) {
+          setSecondHandInventory(shInv);
+          if (shInv.length === 0) {
+            const shSeeds = [
+              { model: 'Honda Livo', cc: 110, color: 'Grey', price: 40000, registration_number: 'PENDING' },
+              { model: 'Hero iSmart', cc: 110, color: 'Red Black', price: 28000, registration_number: 'PENDING' },
+              { model: 'Bajaj Pulsar', cc: 150, color: 'Black', price: 35000, registration_number: 'PENDING' },
+              { model: 'Bajaj Discover', cc: 150, color: 'Black Blue', price: 20000, registration_number: 'PENDING' },
+              { model: 'Honda Dream Yuga', cc: 110, color: 'Not specified', price: 26000, registration_number: 'PENDING' },
+              { model: 'Honda Unicorn', cc: 160, color: 'Red', price: 35000, registration_number: 'PENDING' },
+              { model: 'Honda Shine', cc: 100, color: 'Black (Red patti)', price: 45000, stock: 2, registration_number: 'PENDING' },
+              { model: 'Honda Shine', cc: 100, color: 'Black Yellow', price: 45000, registration_number: 'PENDING' },
+              { model: 'Honda Shine', cc: 125, color: 'Red Black (Red patti)', price: 36000, registration_number: 'PENDING' },
+              { model: 'Honda Shine', cc: 125, color: 'Grey (White patti)', price: 42000, registration_number: 'PENDING' },
+              { model: 'Hero HF 100', cc: 100, color: 'Black (Blue patti)', price: 60000, registration_number: 'PENDING' },
+              { model: 'Hero Glamour', cc: 125, color: 'Blue', price: 80000, registration_number: 'PENDING' },
+              { model: 'Honda Shine BS6', cc: 125, color: 'Black (Red patti)', price: 45000, registration_number: 'PENDING' },
+              { model: 'Hero Destini', cc: 110, color: 'Black', price: 25000, registration_number: 'PENDING' }
+            ];
+            supabase.from('second_hand_inventory').insert(shSeeds).select().then(({ data, error }) => {
+              if (error) console.error("Second hand seeding error:", error);
+              if (data) setSecondHandInventory(current => {
+                const uniqueData = data.filter(d => !current.some(c => c.id === d.id));
+                return [...current, ...uniqueData];
+              });
+            });
+          }
+        }
         if (saleRows) setSales(saleRows);
         if (rcRows) setRcRecords(rcRows);
         if (driveRows) setTestDrives(driveRows);
