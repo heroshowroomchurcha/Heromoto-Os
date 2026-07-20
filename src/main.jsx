@@ -915,7 +915,7 @@ function InvoiceModal({ record, onClose }) {
   let logoUrl = '/hero.png';
   let showroomSubText = 'Hero MotoCorp · Andheri West';
   let thankYouText = 'Thank you for choosing Hero MotoCorp.';
-  let rcText = 'RC application has been linked to this sale.';
+  let rcText = 'Number plate application has been linked to this sale.';
   let waBrand = 'Hero MotoCorp';
 
   if (isSecondHand) {
@@ -928,7 +928,7 @@ function InvoiceModal({ record, onClose }) {
     logoUrl = null;
     showroomSubText = `${brandName} Showroom Sales`;
     thankYouText = `Thank you for choosing ${brandName} with us.`;
-    rcText = 'RC application is being processed.';
+    rcText = 'Number plate application is being processed.';
     waBrand = brandName;
   }
 
