@@ -26,6 +26,9 @@ const Icon = ({ name, size = 18 }) => {
     calc: <><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></>,
     x: <><path d="M18 6 6 18"/><path d="m6 6 12 12"/></>,
     refresh: <><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></>,
+    phone: <><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></>,
+    edit: <><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></>,
+    trash: <><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></>,
   };
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 };
@@ -1480,15 +1483,29 @@ const Metric = ({ label, value, delta, foot, accent }) => { const type = label =
 
 function EnquiriesWorkspace({ enquiries, onChange, onToast }) {
   const [showModal, setShowModal] = useState(false);
+  const [editingEnquiry, setEditingEnquiry] = useState(null);
   
   async function handleSave(data) {
-    const { data: newRow, error } = await supabase.from('enquiries').insert([data]).select().single();
-    if (error) {
-      alert(error.message);
+    if (data.id) {
+      const { id, ...updateData } = data;
+      const { error } = await supabase.from('enquiries').update(updateData).eq('id', id);
+      if (error) {
+        alert(error.message);
+      } else {
+        onChange(current => current.map(e => e.id === id ? { ...e, ...updateData } : e));
+        setShowModal(false);
+        setEditingEnquiry(null);
+        onToast('Enquiry updated');
+      }
     } else {
-      onChange(current => [newRow, ...current]);
-      setShowModal(false);
-      onToast('Enquiry saved');
+      const { data: newRow, error } = await supabase.from('enquiries').insert([data]).select().single();
+      if (error) {
+        alert(error.message);
+      } else {
+        onChange(current => [newRow, ...current]);
+        setShowModal(false);
+        onToast('Enquiry saved');
+      }
     }
   }
 
@@ -1499,38 +1516,59 @@ function EnquiriesWorkspace({ enquiries, onChange, onToast }) {
     }
   }
 
+  async function handleDelete(id) {
+    if (!confirm('Are you sure you want to delete this enquiry?')) return;
+    const { error } = await supabase.from('enquiries').delete().eq('id', id);
+    if (error) {
+      alert(error.message);
+    } else {
+      onChange(current => current.filter(e => e.id !== id));
+      onToast('Enquiry deleted');
+    }
+  }
+
+  function openEdit(enquiry) {
+    setEditingEnquiry(enquiry);
+    setShowModal(true);
+  }
+
   return <section className="workspace-panel">
     <div className="panel-head">
       <div><h2>Customer Enquiries</h2><p>Manage new vehicle enquiries and follow-ups</p></div>
-      <button className="primary-button" onClick={() => setShowModal(true)}><Icon name="plus" size={17}/> Add enquiry</button>
+      <button className="primary-button" onClick={() => { setEditingEnquiry(null); setShowModal(true); }}><Icon name="plus" size={17}/> Add enquiry</button>
     </div>
     <div className="table-wrap">
-      <div className="table-head">
+      <div className="table-head" style={{gridTemplateColumns: '1fr 2fr 1.5fr 2fr 1fr 2.5fr'}}>
         <span>Date</span><span>Customer Name</span><span>Phone Number</span><span>Interested Vehicle</span><span>Status</span><span>Action</span>
       </div>
       {enquiries.map(e => (
-        <div className="sale-row" key={e.id}>
+        <div className="sale-row" key={e.id} style={{gridTemplateColumns: '1fr 2fr 1.5fr 2fr 1fr 2.5fr'}}>
           <span className="muted">{new Date(e.created_at).toLocaleDateString()}</span>
           <b>{e.customer_name}</b>
           <span>{e.customer_phone}</span>
           <span className="vehicle-highlight"><b>{e.vehicle}</b></span>
           <span className={`status ${e.status === 'Completed' ? 'success' : 'warning'}`}><i/>{e.status}</span>
-          {e.status !== 'Completed' ? <button className="outline-button" style={{padding: '4px 8px'}} onClick={() => updateStatus(e.id, 'Completed')}>Mark Done</button> : <span className="muted">Done</span>}
+          <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
+            {e.status !== 'Completed' && <button className="outline-button" style={{padding: '4px 8px'}} onClick={() => updateStatus(e.id, 'Completed')} title="Mark Done"><Icon name="check" size={14}/></button>}
+            <a href={`tel:${e.customer_phone}`} className="outline-button" style={{padding: '4px 8px', textDecoration: 'none', color: 'inherit'}} title="Call"><Icon name="phone" size={14}/></a>
+            <button className="outline-button" style={{padding: '4px 8px'}} onClick={() => openEdit(e)} title="Edit"><Icon name="edit" size={14}/></button>
+            <button className="icon-button" style={{color: '#dc3545', marginLeft: 'auto'}} onClick={() => handleDelete(e.id)} title="Delete"><Icon name="trash" size={16}/></button>
+          </div>
         </div>
       ))}
       {enquiries.length === 0 && <div style={{padding: '40px', textAlign: 'center', color: '#666'}}>No enquiries found.</div>}
     </div>
-    {showModal && <EnquiryModal onClose={() => setShowModal(false)} onSave={handleSave} />}
+    {showModal && <EnquiryModal initialData={editingEnquiry} onClose={() => { setShowModal(false); setEditingEnquiry(null); }} onSave={handleSave} />}
   </section>;
 }
 
-function EnquiryModal({ onClose, onSave }) {
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [vehicle, setVehicle] = useState('');
+function EnquiryModal({ initialData, onClose, onSave }) {
+  const [name, setName] = useState(initialData ? initialData.customer_name : '');
+  const [phone, setPhone] = useState(initialData ? initialData.customer_phone : '');
+  const [vehicle, setVehicle] = useState(initialData ? initialData.vehicle : '');
 
   return <div className="modal-backdrop" onClick={onClose}><div className="modal sale-modal" onClick={e => e.stopPropagation()}>
-    <div className="modal-head"><h2>New Enquiry</h2><button className="icon-button" onClick={onClose}><Icon name="x" size={20}/></button></div>
+    <div className="modal-head"><h2>{initialData ? 'Edit Enquiry' : 'New Enquiry'}</h2><button className="icon-button" onClick={onClose}><Icon name="x" size={20}/></button></div>
     <div className="form-grid">
       <label>Customer name<input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Rahul Kumar" required/></label>
       <label>Phone number<input value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. 9876543210" required/></label>
@@ -1538,7 +1576,7 @@ function EnquiryModal({ onClose, onSave }) {
     </div>
     <div className="modal-foot">
       <button className="outline-button" onClick={onClose}>Cancel</button>
-      <button className="primary-button" disabled={!name || !phone || !vehicle} onClick={() => onSave({ customer_name: name, customer_phone: phone, vehicle })}>Save enquiry</button>
+      <button className="primary-button" disabled={!name || !phone || !vehicle} onClick={() => onSave({ id: initialData?.id, customer_name: name, customer_phone: phone, vehicle })}>{initialData ? 'Update' : 'Save'}</button>
     </div>
   </div></div>;
 }
