@@ -413,7 +413,7 @@ function App() {
   const nav = [
     { label: 'Overview', icon: 'grid' }, 
     { label: 'Inventory', icon: 'bike' }, 
-    { label: 'Other bikes', icon: 'bike', count: inventory.filter(v => (v.brand && v.brand.toLowerCase() !== 'hero') && Number(v.stock) > 0).length || undefined },
+    { label: 'Other bikes', icon: 'box', count: inventory.filter(v => (v.brand && v.brand.toLowerCase() !== 'hero') && Number(v.stock) > 0).length || undefined },
     { label: 'Second hand', icon: 'refresh', count: secondHandInventory.filter(v => Number(v.stock) > 0).length || undefined }, 
     { label: 'Sales', icon: 'tag', count: sales.length || undefined }, 
     { label: 'Test drives', icon: 'key', count: testDrives.filter(t => t.status !== 'Completed').length || undefined }, 
