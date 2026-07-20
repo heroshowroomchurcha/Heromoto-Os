@@ -99,11 +99,12 @@ function App() {
   const [profile, setProfile] = useState(null);
   const [active, setActive] = useState('Overview');
   const [query, setQuery] = useState('');
-  const [inventory, setInventory] = useState(fallbackInventory);
+  const [inventory, setInventory] = useState([]);
   const [testDriveInventory, setTestDriveInventory] = useState(fallbackTestDriveInventory);
-  const [secondHandInventory, setSecondHandInventory] = useState(fallbackSecondHandInventory);
+  const [secondHandInventory, setSecondHandInventory] = useState([]);
   const [sales, setSales] = useState(fallbackSales);
   const [rcRecords, setRcRecords] = useState([]);
+  const [enquiries, setEnquiries] = useState([]);
   const [testDrives, setTestDrives] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [pendingDues, setPendingDues] = useState([]);
@@ -188,7 +189,7 @@ function App() {
     if (!session?.user?.id) return;
     let mounted = true;
     async function load() {
-      const [{ data: inv }, { data: tdInv }, { data: shInv }, { data: saleRows }, { data: rcRows }, { data: driveRows }, { data: customerRows }, { data: duesRows }, { data: settings }] = await Promise.all([
+      const [{ data: inv }, { data: tdInv }, { data: shInv }, { data: saleRows }, { data: rcRows }, { data: driveRows }, { data: customerRows }, { data: duesRows }, { data: settings }, { data: enquiriesRows }] = await Promise.all([
         supabase.from('inventory').select('*').order('model'),
         supabase.from('test_drive_inventory').select('*').order('model'),
         supabase.from('second_hand_inventory').select('*').order('model'),
@@ -198,6 +199,7 @@ function App() {
         supabase.from('customers').select('*').order('created_at', { ascending: false }).limit(100),
         supabase.from('pending_dues').select('*').order('created_at', { ascending: false }).limit(50),
         supabase.from('showroom_settings').select('*').eq('id', 1).maybeSingle(),
+        supabase.from('enquiries').select('*').order('created_at', { ascending: false }).limit(100)
       ]);
       if (mounted) {
         if (settings) setShowroomSettings(settings);
@@ -252,6 +254,7 @@ function App() {
         if (driveRows) setTestDrives(driveRows);
         if (customerRows) setCustomers(customerRows);
         if (duesRows) setPendingDues(duesRows);
+        if (enquiriesRows) setEnquiries(enquiriesRows);
       }
     }
     load();
@@ -469,6 +472,7 @@ function App() {
     { label: 'Test drives', icon: 'key', count: testDrives.filter(t => t.status !== 'Completed').length || undefined }, 
     { label: 'Number plate', icon: 'file', count: rcRecords.filter(r => r.status !== 'Completed').length || undefined }, 
     { label: 'Customers', icon: 'users', count: visibleCustomers?.length || undefined }, 
+    { label: 'Enquiries', icon: 'users', count: enquiries.filter(e => e.status !== 'Completed').length || undefined },
     { label: 'Pending dues', icon: 'file', count: pendingDues.filter(d => d.status === 'Pending').length || undefined }, 
     { label: 'EMI calculator', icon: 'calc' }
   ];
@@ -506,6 +510,7 @@ function App() {
       : active === 'Test ride inventory' ? <TestRideInventoryWorkspace vehicles={testDriveInventory} onChange={setTestDriveInventory} onToast={setToast} />
       : active === 'EMI calculator' ? <EMIWorkspace defaultAmount={inventory[0]?.on_road_price || 100000} />
       : active === 'Pending dues' ? <PendingDuesWorkspace dues={filteredPendingDues} onChange={setPendingDues} onToast={setToast} />
+      : active === 'Enquiries' ? <EnquiriesWorkspace enquiries={enquiries} onChange={setEnquiries} onToast={setToast} />
       : active === 'Inventory management' ? <InventoryManagementWorkspace inventory={filteredInventory} onChange={setInventory} onToast={setToast} /> : <section className="placeholder-panel panel"><div className="empty-icon"><Icon name="chart" size={27}/></div><h2>{active} workspace ready</h2><p>Database connected. Is module ka next workflow yahan manage hoga.</p><button className="primary-button" onClick={() => setActive('Inventory')}><Icon name="bike" size={17}/> Open inventory</button></section>}
     </div></main>
     {selectedVehicle && <SaleModal vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} onSave={completeSale} />}
@@ -1012,18 +1017,24 @@ function RCTracker({ records, onStatusChange }) {
   </section>;
 }
 
-function SignaturePad({ value, onChange }) {
+function SignaturePad({ value, onChange, label = "Customer signature" }) {
   const canvasRef = useRef(null);
   const drawing = useRef(false);
   const [typedName, setTypedName] = useState('');
+  const [isEditing, setIsEditing] = useState(!value);
   const point = event => { const rect = canvasRef.current.getBoundingClientRect(); const scaleX = canvasRef.current.width / rect.width; const scaleY = canvasRef.current.height / rect.height; return { x: (event.clientX - rect.left) * scaleX, y: (event.clientY - rect.top) * scaleY }; };
   const start = event => { drawing.current = true; canvasRef.current.setPointerCapture(event.pointerId); const ctx = canvasRef.current.getContext('2d'); const p = point(event); ctx.beginPath(); ctx.moveTo(p.x, p.y); };
   const move = event => { if (!drawing.current) return; const canvas = canvasRef.current; const ctx = canvas.getContext('2d'); const p = point(event); ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.strokeStyle = '#252524'; ctx.lineTo(p.x, p.y); ctx.stroke(); onChange(canvas.toDataURL('image/png')); };
   const end = () => { drawing.current = false; };
   const drawTypedName = name => { const canvas = canvasRef.current; const ctx = canvas.getContext('2d'); ctx.clearRect(0, 0, canvas.width, canvas.height); if (name.trim()) { ctx.fillStyle = '#252524'; ctx.font = '600 130px Caveat, cursive'; ctx.textBaseline = 'middle'; ctx.fillText(name.trim(), 40, canvas.height / 2 + 10); onChange(canvas.toDataURL('image/png')); } else onChange(''); };
   const handleTypedName = event => { const name = event.target.value; setTypedName(name); if (!drawing.current) drawTypedName(name); };
-  const clear = () => { const canvas = canvasRef.current; canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height); setTypedName(''); onChange(''); };
-  return <div className="signature-wrap"><div className="signature-head"><span>Customer signature</span><button type="button" className="signature-clear" onClick={clear}>Clear</button></div><canvas ref={canvasRef} width="900" height="190" className="signature-pad" onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end}/><div className="typed-signature"><label>Can’t sign? Type full name<input value={typedName} onChange={handleTypedName} placeholder="e.g. Priya Shah"/></label><small>Typed name is converted into a digital signature.</small></div><small>Draw above or type your name to include a digital signature on the invoice PDF.</small></div>;
+  const clear = () => { setIsEditing(true); setTypedName(''); onChange(''); if (canvasRef.current) canvasRef.current.getContext('2d').clearRect(0, 0, canvasRef.current.width, canvasRef.current.height); };
+  
+  if (!isEditing && value) {
+    return <div className="signature-wrap"><div className="signature-head"><span>{label}</span><button type="button" className="signature-clear" onClick={() => setIsEditing(true)}>Edit Signature</button></div><div style={{background: 'white', padding: '10px', borderRadius: '8px', border: '1px solid #ddd', display: 'flex', justifyContent: 'center'}}><img src={value} alt="Signature" style={{maxHeight: '90px'}}/></div></div>;
+  }
+  
+  return <div className="signature-wrap"><div className="signature-head"><span>{label}</span><button type="button" className="signature-clear" onClick={clear}>Clear</button></div><canvas ref={canvasRef} width="900" height="190" className="signature-pad" onPointerDown={start} onPointerMove={move} onPointerUp={end} onPointerCancel={end}/><div className="typed-signature"><label>Can’t sign? Type full name<input value={typedName} onChange={handleTypedName} placeholder="e.g. Priya Shah"/></label><small>Typed name is converted into a digital signature.</small></div><small>Draw above or type your name to include a digital signature on the invoice PDF.</small></div>;
 }
 
 function SaleModal({ vehicle, onClose, onSave }) {
@@ -1111,7 +1122,7 @@ function OwnerSettingsModal({ onClose, onSignOut, currentSettings, currentSignat
   }
 
   return <div className="modal-backdrop" onClick={onClose}><div className="modal sale-modal" style={{maxWidth:'500px'}} onClick={e => e.stopPropagation()}><div className="modal-head"><h2>Settings & Profile</h2><button className="icon-button" onClick={onClose}><Icon name="x" size={20}/></button></div><div className="modal-body">
-    <div style={{background:'#f5f5f5', padding:'16px', borderRadius:'10px', marginBottom:'20px'}}><b>Authorized Signatory</b><p style={{fontSize:'13px', color:'#666', marginTop:'4px', marginBottom:'16px'}}>This signature will appear permanently on all invoices as the showroom owner's signature.</p><SignaturePad value={signature} onChange={setSignature} /></div>
+    <div style={{background:'#f5f5f5', padding:'16px', borderRadius:'10px', marginBottom:'20px'}}><b>Authorized Signatory</b><p style={{fontSize:'13px', color:'#666', marginTop:'4px', marginBottom:'16px'}}>This signature will appear permanently on all invoices as the showroom owner's signature.</p><SignaturePad value={signature} onChange={setSignature} label="Owner signature" /></div>
     <div style={{background:'#e2efe1', padding:'16px', borderRadius:'10px', marginBottom:'20px'}}>
       <b>Daily Automatic Backup (Frontend)</b>
       <p style={{fontSize:'13px', color:'#528d5f', marginTop:'4px', marginBottom:'16px'}}>Exports sales, customers & dues as CSV to your email. <strong>Requires this browser tab to be open.</strong></p>
@@ -1488,5 +1499,70 @@ function SecondHandInventoryWorkspace({ vehicles, onChange, onSell, onToast }) {
 }
 
 const Metric = ({ label, value, delta, foot, accent }) => { const type = label === 'MONTHLY SALES' ? 'sales-chart' : label === 'UNITS SOLD' ? 'units-chart' : label === 'AVAILABLE STOCK' ? 'stock-chart' : 'rc-chart'; return <div className="metric"><p className="eyebrow">{label}</p><div className="metric-main"><strong>{value}</strong><span className={accent === 'amber' ? 'metric-delta amber' : 'metric-delta'}>{delta}</span></div><span className="muted">{foot}</span>{type === 'sales-chart' && <div className="metric-chart sales-chart"><svg viewBox="0 0 120 38" preserveAspectRatio="none"><path className="chart-area" d="M2 32 L18 25 L32 28 L47 17 L62 21 L78 9 L94 14 L108 4 L118 8 L118 38 L2 38 Z"/><path className="chart-line" d="M2 32 L18 25 L32 28 L47 17 L62 21 L78 9 L94 14 L108 4 L118 8"/></svg><span>7-day sales</span></div>}{type === 'units-chart' && <div className="metric-chart units-chart"><div className="units-bars"><i/><i/><i/><i/><i/><i/><i/></div><span>units moved</span></div>}{type === 'stock-chart' && <div className="metric-chart stock-chart"><div className="stock-ring"><b>LIVE</b></div><span>available now</span></div>}{type === 'rc-chart' && <div className="metric-chart rc-chart"><div className="rc-track"><i/></div><span>needs attention</span></div>}</div>; };
+
+function EnquiriesWorkspace({ enquiries, onChange, onToast }) {
+  const [showModal, setShowModal] = useState(false);
+  
+  async function handleSave(data) {
+    const { data: newRow, error } = await supabase.from('enquiries').insert([data]).select().single();
+    if (error) {
+      alert(error.message);
+    } else {
+      onChange(current => [newRow, ...current]);
+      setShowModal(false);
+      onToast('Enquiry saved');
+    }
+  }
+
+  async function updateStatus(id, newStatus) {
+    const { error } = await supabase.from('enquiries').update({ status: newStatus }).eq('id', id);
+    if (!error) {
+      onChange(current => current.map(e => e.id === id ? { ...e, status: newStatus } : e));
+    }
+  }
+
+  return <section className="workspace-panel">
+    <div className="panel-head">
+      <div><h2>Customer Enquiries</h2><p>Manage new vehicle enquiries and follow-ups</p></div>
+      <button className="primary-button" onClick={() => setShowModal(true)}><Icon name="plus" size={17}/> Add enquiry</button>
+    </div>
+    <div className="table-wrap">
+      <div className="table-head">
+        <span>Date</span><span>Customer Name</span><span>Phone Number</span><span>Interested Vehicle</span><span>Status</span><span>Action</span>
+      </div>
+      {enquiries.map(e => (
+        <div className="sale-row" key={e.id}>
+          <span className="muted">{new Date(e.created_at).toLocaleDateString()}</span>
+          <b>{e.customer_name}</b>
+          <span>{e.customer_phone}</span>
+          <span className="vehicle-highlight"><b>{e.vehicle}</b></span>
+          <span className={`status ${e.status === 'Completed' ? 'success' : 'warning'}`}><i/>{e.status}</span>
+          {e.status !== 'Completed' ? <button className="outline-button" style={{padding: '4px 8px'}} onClick={() => updateStatus(e.id, 'Completed')}>Mark Done</button> : <span className="muted">Done</span>}
+        </div>
+      ))}
+      {enquiries.length === 0 && <div style={{padding: '40px', textAlign: 'center', color: '#666'}}>No enquiries found.</div>}
+    </div>
+    {showModal && <EnquiryModal onClose={() => setShowModal(false)} onSave={handleSave} />}
+  </section>;
+}
+
+function EnquiryModal({ onClose, onSave }) {
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [vehicle, setVehicle] = useState('');
+
+  return <div className="modal-backdrop" onClick={onClose}><div className="modal sale-modal" onClick={e => e.stopPropagation()}>
+    <div className="modal-head"><h2>New Enquiry</h2><button className="icon-button" onClick={onClose}><Icon name="x" size={20}/></button></div>
+    <div className="form-grid">
+      <label>Customer name<input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Rahul Kumar" required/></label>
+      <label>Phone number<input value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. 9876543210" required/></label>
+      <label>Interested vehicle<input value={vehicle} onChange={e => setVehicle(e.target.value)} placeholder="e.g. Splendor+ XTEC" required/></label>
+    </div>
+    <div className="modal-foot">
+      <button className="outline-button" onClick={onClose}>Cancel</button>
+      <button className="primary-button" disabled={!name || !phone || !vehicle} onClick={() => onSave({ customer_name: name, customer_phone: phone, vehicle })}>Save enquiry</button>
+    </div>
+  </div></div>;
+}
 
 createRoot(document.getElementById('root')).render(<App />);
