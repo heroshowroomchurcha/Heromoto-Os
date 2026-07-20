@@ -513,7 +513,7 @@ function App() {
     {showTestDriveModal && <TestDriveModal vehicles={testDriveInventory} onClose={() => setShowTestDriveModal(false)} onSave={saveTestDrive} />}
     {showOwnerSettings && <OwnerSettingsModal currentSettings={showroomSettings} currentSignature={globalOwnerSignature} onClose={() => setShowOwnerSettings(false)} onSignOut={() => supabase.auth.signOut()} onSettingsSaved={(newSettings) => setShowroomSettings({ ...showroomSettings, ...newSettings })} />}
     {toast && <div className="toast"><Icon name="check" size={16}/>{toast}</div>}
-  );
+  </div>;
 }
 
 function Overview({ isOwner, sales, inventory, secondHandInventory, monthlySales, stockTotal, rcRecords, setActive, onDownloadBackup }) {
