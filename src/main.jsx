@@ -197,6 +197,32 @@ function App() {
     return () => { mounted = false; };
   }, [session?.user?.id]);
 
+  // Auto-sync cleanup for duplicate Honda/TVS bikes
+  useEffect(() => {
+    async function fixDuplicates() {
+      if (!session?.user?.id) return;
+      const { data: inv } = await supabase.from('inventory').select('*').in('brand', ['Honda', 'TVS']);
+      if (inv && inv.length > 10) {
+        const seen = new Set();
+        const toDelete = [];
+        for (const item of inv) {
+          const key = `${item.brand}-${item.model}-${item.variant}`;
+          if (seen.has(key)) {
+            toDelete.push(item.id);
+          } else {
+            seen.add(key);
+          }
+        }
+        if (toDelete.length > 0) {
+          console.log(`Syncing list... removing ${toDelete.length} duplicates`);
+          await supabase.from('inventory').delete().in('id', toDelete);
+          window.location.reload();
+        }
+      }
+    }
+    fixDuplicates();
+  }, [session?.user?.id]);
+
   const filteredInventory = useMemo(() => inventory.filter(v => `${v.model} ${v.variant} ${v.color}`.toLowerCase().includes(query.toLowerCase())), [inventory, query]);
   const monthlySales = sales.reduce((sum, sale) => sum + Number(sale.sale_amount || 0), 0);
   const stockTotal = inventory.reduce((sum, v) => sum + Number(v.stock || 0), 0);
