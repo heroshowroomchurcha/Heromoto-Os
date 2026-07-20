@@ -510,7 +510,10 @@ function InventoryManagementWorkspace({ inventory, onChange, onToast }) {
   async function save(e) {
     e.preventDefault();
     setBusy(true);
-    const totalStock = editingStockByColor.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+    const hasColorVariants = editingStockByColor.length > 0;
+    const totalStock = hasColorVariants
+      ? editingStockByColor.reduce((sum, item) => sum + Number(item.qty || 0), 0)
+      : Number(editing.stock || 0);
     const payload = { 
       ex_showroom_price: Number(editing.ex_showroom_price), 
       on_road_price: Number(editing.on_road_price),
@@ -590,6 +593,13 @@ function InventoryManagementWorkspace({ inventory, onChange, onToast }) {
           <div style={{display: 'flex', gap: '16px'}}>
             <label style={{flex: 1}}>Ex-showroom Price (₹)<input type="number" required value={editing.ex_showroom_price} onChange={e => setEditing({...editing, ex_showroom_price: e.target.value})}/></label>
             <label style={{flex: 1}}>On-road Price (₹)<input type="number" required value={editing.on_road_price} onChange={e => setEditing({...editing, on_road_price: e.target.value})}/></label>
+          </div>
+          <div>
+            {editingStockByColor.length === 0 ? (
+              <label>Total Stock Qty<input type="number" min="0" required value={editing.stock || 0} onChange={e => setEditing({...editing, stock: Number(e.target.value)})}/></label>
+            ) : (
+              <label>Total Stock Qty (Calculated from colors)<input type="number" disabled value={editingStockByColor.reduce((sum, item) => sum + Number(item.qty || 0), 0)}/></label>
+            )}
           </div>
           <div>
             <label>Color-wise Stock</label>

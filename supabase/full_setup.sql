@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS public.inventory (
   on_road_price numeric,
   max_discount numeric,
   stock integer not null default 1,
+  stock_by_color jsonb default '[]'::jsonb,
   created_at timestamptz default now()
 );
 

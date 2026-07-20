@@ -5,6 +5,7 @@
 -- Replace these broad policies with authenticated staff policies before production.
 alter table if exists public.inventory enable row level security;
 alter table if exists public.inventory add column if not exists cc integer;
+alter table if exists public.inventory add column if not exists stock_by_color jsonb default '[]'::jsonb;
 alter table if exists public.customers add column if not exists aadhaar_last4 text;
 alter table if exists public.customers add column if not exists pan_masked text;
 alter table if exists public.customers add column if not exists aadhaar_document_path text;
