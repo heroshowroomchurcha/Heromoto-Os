@@ -266,6 +266,9 @@ create policy "MVP write second hand inventory" on public.second_hand_inventory 
 create table if not exists public.showroom_settings (
   id integer primary key default 1 check (id = 1),
   owner_signature text,
+  auto_backup_enabled boolean default false,
+  auto_backup_key text,
+  auto_backup_time text default '20:00',
   updated_at timestamptz default now()
 );
 alter table public.showroom_settings enable row level security;

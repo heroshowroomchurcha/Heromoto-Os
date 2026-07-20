@@ -146,6 +146,44 @@ function App() {
     return () => window.removeEventListener('rideflow:sms-failed', onSmsFailed);
   }, []);
 
+  function generateBackupCsv() {
+    let csv = 'Data Type,Date,Customer Name,Phone,Details,Amount\n';
+    sales.forEach(s => csv += `Sale,${new Date(s.sale_date).toLocaleDateString()},"${s.customer_name || ''}","","${s.vehicle_name || ''}",${s.sale_amount}\n`);
+    customers.forEach(c => csv += `Customer,${new Date(c.created_at).toLocaleDateString()},"${c.name || ''}","${c.phone || ''}","Kyc added",\n`);
+    pendingDues.forEach(d => csv += `Pending Due,${new Date(d.created_at).toLocaleDateString()},"${d.customer_name || ''}","${d.customer_phone || ''}","Status: ${d.status}",${d.amount}\n`);
+    return csv;
+  }
+
+  useEffect(() => {
+    if (!showroomSettings?.auto_backup_enabled || !showroomSettings?.auto_backup_key) return;
+    const interval = window.setInterval(async () => {
+      const now = new Date();
+      const currentTime = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+      if (currentTime === showroomSettings.auto_backup_time) {
+        const lastSent = localStorage.getItem('rideflow_last_auto_backup');
+        const todayStr = now.toLocaleDateString();
+        if (lastSent !== todayStr) {
+          localStorage.setItem('rideflow_last_auto_backup', todayStr);
+          try {
+            const formData = new FormData();
+            formData.append("access_key", showroomSettings.auto_backup_key);
+            formData.append("subject", `RideFlow Daily Backup - ${todayStr}`);
+            formData.append("message", "Attached is your daily backup for sales, customers, and pending dues.");
+            const csv = generateBackupCsv();
+            const blob = new Blob([csv], { type: 'text/csv' });
+            formData.append("attachment", blob, `RideFlow_Backup_${now.toISOString().slice(0,10)}.csv`);
+            await fetch("https://api.web3forms.com/submit", { method: "POST", body: formData });
+            console.log("Auto-backup sent successfully.");
+          } catch(e) {
+            console.error("Auto-backup failed", e);
+            localStorage.removeItem('rideflow_last_auto_backup');
+          }
+        }
+      }
+    }, 60000); // Check every minute
+    return () => window.clearInterval(interval);
+  }, [showroomSettings, sales, customers, pendingDues]);
+
   useEffect(() => {
     if (!session?.user?.id) return;
     let mounted = true;
@@ -390,16 +428,7 @@ function App() {
   }
 
   async function downloadBackup() {
-    let csv = 'Data Type,Date,Customer Name,Phone,Details,Amount\n';
-    sales.forEach(s => {
-      csv += `Sale,${new Date(s.sale_date).toLocaleDateString()},"${s.customer_name || ''}","","${s.vehicle_name || ''}",${s.sale_amount}\n`;
-    });
-    customers.forEach(c => {
-      csv += `Customer,${new Date(c.created_at).toLocaleDateString()},"${c.name || ''}","${c.phone || ''}","Kyc added",\n`;
-    });
-    pendingDues.forEach(d => {
-      csv += `Pending Due,${new Date(d.created_at).toLocaleDateString()},"${d.customer_name || ''}","${d.customer_phone || ''}","Status: ${d.status}",${d.amount}\n`;
-    });
+    const csv = generateBackupCsv();
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -482,7 +511,7 @@ function App() {
     {selectedVehicle && <SaleModal vehicle={selectedVehicle} onClose={() => setSelectedVehicle(null)} onSave={completeSale} />}
     {invoiceSale && <InvoiceModal record={invoiceSale} onClose={() => setInvoiceSale(null)} />}
     {showTestDriveModal && <TestDriveModal vehicles={testDriveInventory} onClose={() => setShowTestDriveModal(false)} onSave={saveTestDrive} />}
-    {showOwnerSettings && <OwnerSettingsModal currentSignature={globalOwnerSignature} onClose={() => setShowOwnerSettings(false)} onSignOut={() => supabase.auth.signOut()} onSettingsSaved={(newSig) => setShowroomSettings({ ...showroomSettings, owner_signature: newSig })} />}
+    {showOwnerSettings && <OwnerSettingsModal currentSettings={showroomSettings} currentSignature={globalOwnerSignature} onClose={() => setShowOwnerSettings(false)} onSignOut={() => supabase.auth.signOut()} onSettingsSaved={(newSettings) => setShowroomSettings({ ...showroomSettings, ...newSettings })} />}
     {toast && <div className="toast"><Icon name="check" size={16}/>{toast}</div>}
   </div>;
   const pendingRcCount = rcRecords?.filter(r => r.status !== 'Completed').length || 0;
@@ -1055,24 +1084,41 @@ function InvoiceModal({ record, ownerSignature, onClose }) {
   return <div className="modal-backdrop invoice-backdrop" onClick={onClose}><div className="invoice-sheet" onClick={e => e.stopPropagation()}><div className="invoice-actions"><button className="ghost-button" onClick={onClose}>Close</button><button className="ghost-button" disabled={pdfBusy} onClick={shareWhatsApp}>Send on WhatsApp</button><button className="primary-button" disabled={pdfBusy} onClick={downloadPdf}>{pdfBusy ? 'Preparing PDF…' : 'Download PDF'}</button></div><div className="invoice-paper" ref={invoiceRef}><div className="invoice-top"><div><div className="invoice-brand" style={{display: 'flex', alignItems: 'center'}}>{logoUrl ? <img src={logoUrl} alt={waBrand} style={{height:'64px', width:'auto', objectFit:'contain'}}/> : <div className="brand-mark" style={{width:'36px', height:'36px', background:'#212326', color:'#fff', borderRadius:'6px', display:'grid', placeItems:'center', marginRight:'12px', fontWeight:'bold', fontSize:'18px'}}>R</div>}</div><p>{showroomSubText}<br/>NH43 main road near police station churcha colliery<br/>Dist Koriya, Chhattisgarh - 497339<br/>Mobile: 9565550673, 7354205099</p></div><div className="invoice-meta"><small>TAX INVOICE</small><strong>{invoiceNo}</strong><span>{dateLabel(sale.sale_date)} · {new Date(sale.sale_date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span></div></div><div className="invoice-rule"/><div className="invoice-parties"><div><small>BILLED TO</small><b>{customer.name}</b><span>{customer.phone || 'Phone not added'}</span>{customer.aadhaar_document_path || customer.aadhaar_back_document_path ? <span>Aadhaar · Document uploaded</span> : customer.aadhaar_last4 ? <span>Aadhaar · •••• {customer.aadhaar_last4}</span> : null}<span>PAN · {customer.pan_masked || (customer.pan_document_path ? 'Document uploaded' : 'Not added')}</span></div><div><small>VEHICLE DETAILS</small><b>{vehicle.model}</b>{(vehicle.variant || vehicle.cc) ? <span>{vehicle.variant ? vehicle.variant : ''}{(vehicle.variant && vehicle.cc) ? ' · ' : ''}{vehicle.cc ? vehicle.cc + ' cc' : ''}</span> : null}<span>Colour · {vehicle.color}</span></div></div><div className="invoice-items"><div className="invoice-item invoice-item-head"><span>DESCRIPTION</span><span>AMOUNT</span></div><div className="invoice-item"><span><b>{vehicle.model} {vehicle.variant}</b><small>{isSecondHand ? 'Pre-owned vehicle price' : 'On-road vehicle price'}</small></span><strong>{money(vehicle.on_road_price || vehicle.ex_showroom_price || vehicle.price)}</strong></div><div className="invoice-item discount-row"><span>Showroom discount</span><strong>− {money(discount)}</strong></div></div><div className="invoice-total"><span>Total payable</span><strong>{money(saleAmount)}</strong></div><div className="invoice-footer"><div><b>{thankYouText}</b><span>{rcText}</span><div style={{marginTop: '20px'}}>{ownerSignature ? <div className="invoice-signature"><img src={ownerSignature} alt="Authorized signature"/><small>Authorized Signatory</small></div> : <div style={{width:'150px', borderBottom:'1px solid #000', marginTop:'40px', paddingBottom:'4px', fontSize:'10px', color:'#666'}}>Authorized Signatory</div>}</div></div><div>{signature && <div className="invoice-signature"><img src={signature} alt="Customer digital signature"/><small>Digitally signed by customer</small></div>}<small>PAYMENT STATUS</small><strong>{sale.payment_status || 'Pending'}</strong></div></div></div></div></div>;
 }
 
-function OwnerSettingsModal({ onClose, onSignOut, currentSignature, onSettingsSaved }) {
+function OwnerSettingsModal({ onClose, onSignOut, currentSettings, currentSignature, onSettingsSaved }) {
   const [signature, setSignature] = useState(currentSignature || '');
+  const [autoBackupEnabled, setAutoBackupEnabled] = useState(currentSettings?.auto_backup_enabled || false);
+  const [autoBackupKey, setAutoBackupKey] = useState(currentSettings?.auto_backup_key || '');
+  const [autoBackupTime, setAutoBackupTime] = useState(currentSettings?.auto_backup_time || '20:00');
   const [saving, setSaving] = useState(false);
+
   async function save() {
     setSaving(true);
     localStorage.setItem('rideflow_owner_signature', signature || '');
-    const { error } = await supabase.from('showroom_settings').upsert({ id: 1, owner_signature: signature || null });
+    const newSettings = { owner_signature: signature || null, auto_backup_enabled: autoBackupEnabled, auto_backup_key: autoBackupKey, auto_backup_time: autoBackupTime };
+    const { error } = await supabase.from('showroom_settings').upsert({ id: 1, ...newSettings });
     setSaving(false);
     if (!error) {
-      if (onSettingsSaved) onSettingsSaved(signature);
+      if (onSettingsSaved) onSettingsSaved(newSettings);
       onClose();
     } else {
       alert("Error saving to cloud, saved locally. Run updated setup.sql.");
-      if (onSettingsSaved) onSettingsSaved(signature);
+      if (onSettingsSaved) onSettingsSaved(newSettings);
       onClose();
     }
   }
-  return <div className="modal-backdrop" onClick={onClose}><div className="modal sale-modal" style={{maxWidth:'500px'}} onClick={e => e.stopPropagation()}><div className="modal-head"><h2>Settings & Profile</h2><button className="icon-button" onClick={onClose}><Icon name="x" size={20}/></button></div><div className="modal-body"><div style={{background:'#f5f5f5', padding:'16px', borderRadius:'10px', marginBottom:'20px'}}><b>Authorized Signatory</b><p style={{fontSize:'13px', color:'#666', marginTop:'4px', marginBottom:'16px'}}>This signature will appear permanently on all invoices as the showroom owner's signature.</p><SignaturePad value={signature} onChange={setSignature} /></div></div><div className="modal-foot" style={{ display: 'flex', justifyContent:'space-between', marginTop: '24px' }}><button type="button" className="ghost-button" onClick={onSignOut} style={{color:'#d32f2f'}}>Sign out</button><div style={{display:'flex', gap:'10px'}}><button type="button" className="outline-button" onClick={onClose}>Cancel</button><button type="button" className="primary-button" disabled={saving} onClick={save}>{saving ? 'Saving...' : 'Save signature'}</button></div></div></div></div>;
+
+  return <div className="modal-backdrop" onClick={onClose}><div className="modal sale-modal" style={{maxWidth:'500px'}} onClick={e => e.stopPropagation()}><div className="modal-head"><h2>Settings & Profile</h2><button className="icon-button" onClick={onClose}><Icon name="x" size={20}/></button></div><div className="modal-body">
+    <div style={{background:'#f5f5f5', padding:'16px', borderRadius:'10px', marginBottom:'20px'}}><b>Authorized Signatory</b><p style={{fontSize:'13px', color:'#666', marginTop:'4px', marginBottom:'16px'}}>This signature will appear permanently on all invoices as the showroom owner's signature.</p><SignaturePad value={signature} onChange={setSignature} /></div>
+    <div style={{background:'#e2efe1', padding:'16px', borderRadius:'10px', marginBottom:'20px'}}>
+      <b>Daily Automatic Backup (Frontend)</b>
+      <p style={{fontSize:'13px', color:'#528d5f', marginTop:'4px', marginBottom:'16px'}}>Exports sales, customers & dues as CSV to your email. <strong>Requires this browser tab to be open.</strong></p>
+      <label style={{display:'flex', alignItems:'center', gap:'10px', marginBottom:'10px', cursor:'pointer'}}><input type="checkbox" checked={autoBackupEnabled} onChange={e => setAutoBackupEnabled(e.target.checked)}/> Enable daily automatic backup</label>
+      {autoBackupEnabled && <div className="form-grid">
+        <label>Web3Forms Access Key <a href="https://web3forms.com" target="_blank" rel="noreferrer" style={{color:'#1c532b', textDecoration:'underline', float:'right', fontWeight:'normal'}}>Get free key</a><input type="text" value={autoBackupKey} onChange={e => setAutoBackupKey(e.target.value)} placeholder="e.g. 52c4b8d... (Sent to your email)" /></label>
+        <label>Time to send email (24-hour)<input type="time" value={autoBackupTime} onChange={e => setAutoBackupTime(e.target.value)} required/></label>
+      </div>}
+    </div>
+  </div><div className="modal-foot" style={{ display: 'flex', justifyContent:'space-between', marginTop: '24px' }}><button type="button" className="ghost-button" onClick={onSignOut} style={{color:'#d32f2f'}}>Sign out</button><div style={{display:'flex', gap:'10px'}}><button type="button" className="outline-button" onClick={onClose}>Cancel</button><button type="button" className="primary-button" disabled={saving} onClick={save}>{saving ? 'Saving...' : 'Save settings'}</button></div></div></div></div>;
 }
 
 function ConfirmModal({ message, confirmText = 'OK', cancelText = 'Cancel', onConfirm, onCancel }) {
