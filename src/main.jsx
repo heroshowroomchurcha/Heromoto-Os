@@ -90,7 +90,7 @@ function AuthScreen() {
     else setMessage(mode === 'signin' ? 'Welcome back.' : 'Account created. Check your email if confirmation is enabled.');
     setBusy(false);
   }
-  return <div className="auth-screen"><div className="auth-panel"><div className="auth-brand"><img src="/hero.png" alt="Hero MotoCorp" style={{height:'30px', width:'auto', objectFit:'contain'}}/><div><b>rideflow</b><small>SHOWROOM OS</small></div></div><p className="eyebrow">SECURE SHOWROOM LOGIN</p><h1>{mode === 'signin' ? 'Welcome back.' : 'Create staff access.'}</h1><p className="auth-copy">Sign in to manage sales, inventory and customer follow-ups.</p><form onSubmit={submit}>{mode === 'signup' && <label>Full name<input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="e.g. Aamir Khan" required/></label>}<label>Email address<input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="staff@showroom.com" required/></label><label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Minimum 6 characters" minLength="6" required/></label><button className="primary-button auth-submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'signin' ? 'Sign in to RideFlow' : 'Create account'}</button></form>{message && <p className="auth-message">{message}</p>}<button className="auth-switch" onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setMessage(''); }}>{mode === 'signin' ? 'Need staff access? Create an account' : 'Already have an account? Sign in'}</button></div><div className="auth-side" style={{backgroundImage: 'url(/showroom-bg.png)', backgroundSize: 'cover', backgroundPosition: 'center right'}}><div style={{position:'absolute',inset:0,background:'linear-gradient(135deg, rgba(15,15,15,0.82) 0%, rgba(25,25,25,0.55) 60%, rgba(10,10,10,0.7) 100%)'}} /><img src="/hero.png" alt="Hero" className="auth-side-mark" style={{position:'relative', zIndex:1, height:'36px', width:'auto', filter:'brightness(0) invert(1)'}}/><p style={{position:'relative', zIndex:1}}>One clean workspace for every ride sold, every RC updated, every customer remembered.</p><small style={{position:'relative', zIndex:1}}>Hero MotoCorp · Churcha</small></div></div>;
+  return <div className="auth-screen"><div className="auth-panel"><div className="auth-brand"><img src="/hero.png" alt="Hero MotoCorp" style={{height:'30px', width:'auto', objectFit:'contain'}}/><div><b>rideflow</b><small>SHOWROOM OS</small></div></div><p className="eyebrow">SECURE SHOWROOM LOGIN</p><h1>{mode === 'signin' ? 'Welcome back.' : 'Create staff access.'}</h1><p className="auth-copy">Sign in to manage sales, inventory and customer follow-ups.</p><form onSubmit={submit}>{mode === 'signup' && <label>Full name<input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="e.g. Aamir Khan" required/></label>}<label>Email address<input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="staff@showroom.com" required/></label><label>Password<input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Minimum 6 characters" minLength="6" required/></label><button className="primary-button auth-submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'signin' ? 'Sign in to RideFlow' : 'Create account'}</button></form>{message && <p className="auth-message">{message}</p>}<button className="auth-switch" onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setMessage(''); }}>{mode === 'signin' ? 'Need staff access? Create an account' : 'Already have an account? Sign in'}</button></div><div className="auth-side" style={{backgroundImage: 'url(/showroom-bg.png)', backgroundSize: 'cover', backgroundPosition: 'center right'}}><div style={{position:'absolute',inset:0,background:'linear-gradient(135deg, rgba(15,15,15,0.82) 0%, rgba(25,25,25,0.55) 60%, rgba(10,10,10,0.7) 100%)'}} /><img src="/hero.png" alt="Hero" className="auth-side-mark" style={{position:'relative', zIndex:1, height:'36px', width:'auto', filter:'brightness(0) invert(1)'}}/><p style={{position:'relative', zIndex:1}}>One clean workspace for every ride sold, every number plate updated, every customer remembered.</p><small style={{position:'relative', zIndex:1}}>Hero MotoCorp · Churcha</small></div></div>;
 }
 
 function App() {
@@ -345,7 +345,7 @@ function App() {
         await supabase.from('sales').update({ rc_photo_path }).eq('id', linkedSale.id);
         linkedSale.rc_photo_path = rc_photo_path;
       } catch (rcError) {
-        setToast(`Sale save ho gayi, lekin RC photo upload fail hua: ${rcError.message}`);
+        setToast(`Sale save ho gayi, lekin number plate photo upload fail hua: ${rcError.message}`);
       }
     }
     const { data: rcRow } = await supabase.from('rc_records').insert({ sale_id: linkedSale.id, customer_name: form.customer, customer_phone: form.phone, vehicle_name: sale.vehicle_name, status: 'Pending' }).select().single();
@@ -439,14 +439,14 @@ function App() {
         }} onInventoryChange={setTestDriveInventory} onToast={setToast} />
       : active === 'Number plate' ? <RCTracker records={filteredRcRecords} onStatusChange={async (record, status) => {
           if (String(record.id).startsWith('sale-rc-')) {
-            setToast('Is sale ka RC Supabase mein create karne ke liye setup.sql policies run karo.');
+            setToast('Is sale ka number plate Supabase mein create karne ke liye setup.sql policies run karo.');
             setTimeout(() => setToast(''), 4000);
             return;
           }
           const { error } = await supabase.from('rc_records').update({ status, ...(status === 'Completed' ? { completed_at: new Date().toISOString() } : {}) }).eq('id', record.id);
           if (!error) {
             setRcRecords(current => current.map(item => item.id === record.id ? { ...item, status } : item));
-            setToast(`RC status updated: ${status}`);
+            setToast(`Number plate status updated: ${status}`);
             setTimeout(() => setToast(''), 5000);
           }
         }} />
@@ -953,11 +953,11 @@ function RCTracker({ records, onStatusChange }) {
       </div>
     </div>
     <div className="rc-header">
-      <div><p className="eyebrow">LINKED TO SALES</p><h2>RC applications</h2><p>Har sold bike ka RC record yahan automatically create hota hai.</p></div>
+      <div><p className="eyebrow">LINKED TO SALES</p><h2>Number plate applications</h2><p>Har sold bike ka number plate record yahan automatically create hota hai.</p></div>
       <div className="rc-summary"><b>{completedRecords.length}</b><span>completed</span><b>{openRecords.length}</b><span>open</span></div>
     </div>
     {shown.length ? <div className="panel rc-table"><div className="table-head rc-table-head"><span>Customer</span><span>Vehicle</span><span>Sale link</span><span>Status</span><span>Update</span></div>{shown.map((record, index) => <div className="rc-row" key={record.id || index}><div className="customer"><div className="avatar" style={{background:['#e8d4ce','#dce3d3','#d9dcea','#e8e0cc'][index % 4]}}>{String(record.customer_name || 'NK').split(' ').map(x => x[0]).join('').slice(0,2)}</div><b>{record.customer_name}</b></div><span className="muted">{record.vehicle_name}</span><span className="sale-link"><i/> Sale #{record.sale_id}</span><span className={`status ${record.status === 'Completed' ? 'success' : record.status === 'Submitted' ? 'info' : 'warning'}`}><i/>{record.status}</span><select value={record.status} onChange={e => onStatusChange(record, e.target.value)}><option>Pending</option><option>Submitted</option><option>Processing</option><option>Completed</option></select></div>)}</div>
-    : <div className="panel placeholder-panel"><div className="empty-icon"><Icon name="file" size={27}/></div><h2>{tab === 'Open' ? 'Koi pending RC nahi' : 'Koi completed RC nahi'}</h2><p>{tab === 'Open' ? 'Saari RC applications complete ho gayi hain.' : 'Abhi tak koi RC complete nahi hua.'}</p></div>}
+    : <div className="panel placeholder-panel"><div className="empty-icon"><Icon name="file" size={27}/></div><h2>{tab === 'Open' ? 'Koi pending number plate nahi' : 'Koi completed number plate nahi'}</h2><p>{tab === 'Open' ? 'Saari number plate applications complete ho gayi hain.' : 'Abhi tak koi number plate complete nahi hua.'}</p></div>}
   </section>;
 }
 
