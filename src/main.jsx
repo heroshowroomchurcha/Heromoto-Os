@@ -1026,23 +1026,9 @@ function InvoiceModal({ record, onClose }) {
     } finally { setPdfBusy(false); }
   }
   async function downloadPdf() { const { pdf } = await makePdf(); pdf.save(`${invoiceNo}.pdf`); }
-  async function shareWhatsApp() {
-    try {
-      const { blob } = await makePdf();
-      const file = new File([blob], `${invoiceNo}.pdf`, { type: 'application/pdf' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          title: `Invoice ${invoiceNo}`,
-          text: `Hello ${customer.name}, your ${waBrand} invoice ${invoiceNo} is ready. Total: ${money(saleAmount)}.`,
-          files: [file]
-        });
-        return;
-      }
-    } catch (e) {
-      if (e.name !== 'AbortError') console.error('Share error', e);
-    }
+  function shareWhatsApp() {
     const phone = String(customer.phone || '').replace(/\D/g, '');
-    const text = encodeURIComponent(`Hello ${customer.name}, your ${waBrand} invoice ${invoiceNo} is ready. Total: ${money(saleAmount)}.`);
+    const text = encodeURIComponent(`Hello ${customer.name}, your ${waBrand} invoice ${invoiceNo} is ready. Total: ${money(saleAmount)}. Please download the PDF and send it here.`);
     window.open(`https://wa.me/${phone}?text=${text}`, '_blank', 'noopener,noreferrer');
   }
   const ownerSignature = localStorage.getItem('rideflow_owner_signature');
