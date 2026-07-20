@@ -188,3 +188,8 @@ button,input,select{font-family:inherit}
 .invoice-signature img { max-width: 150px; max-height: 60px; object-fit: contain; display: block; margin-bottom: 5px; }
 .invoice-signature { display: inline-block; text-align: center; }
 
+
+.mobile-only { display: none; }
+@media (max-width: 720px) {
+  .mobile-only { display: inline-flex; }
+}
