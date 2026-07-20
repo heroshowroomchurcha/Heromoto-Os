@@ -205,28 +205,6 @@ function App() {
         if (settings) setShowroomSettings(settings);
         if (inv) {
           setInventory(inv);
-          const hasHondaOrTvs = inv.some(v => v.brand && (v.brand.toLowerCase() === 'honda' || v.brand.toLowerCase() === 'tvs'));
-          if (!hasHondaOrTvs) {
-            const seeds = [
-              { brand: 'Honda', model: 'Shine 100', variant: 'Standard', cc: 100, color: 'Black with White', ex_showroom_price: 65000, on_road_price: 79000, max_discount: 2000, stock: 12, stock_by_color: [{"color":"Black with White","qty":4},{"color":"Black with Red","qty":4},{"color":"Black with Yellow","qty":2},{"color":"Black with Blue","qty":1},{"color":"Black with Green","qty":1}], image_url: 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=500&auto=format&fit=crop' },
-              { brand: 'Honda', model: 'Shine 100 DX', variant: 'DX', cc: 100, color: 'Black with White', ex_showroom_price: 68000, on_road_price: 82000, max_discount: 2500, stock: 2, stock_by_color: [{"color":"Black with White","qty":1},{"color":"Black with Red","qty":1}], image_url: 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=500&auto=format&fit=crop' },
-              { brand: 'Honda', model: 'SP 125', variant: 'Disc', cc: 125, color: 'Red Full', ex_showroom_price: 90000, on_road_price: 105000, max_discount: 3000, stock: 2, stock_by_color: [{"color":"Red Full","qty":1},{"color":"Blue Full","qty":1}], image_url: 'https://images.unsplash.com/photo-1485965120184-e220f721d03e?w=500&auto=format&fit=crop' },
-              { brand: 'Honda', model: 'Unicorn', variant: 'Standard', cc: 160, color: 'Black', ex_showroom_price: 110000, on_road_price: 130000, max_discount: 4000, stock: 1, stock_by_color: [{"color":"Black","qty":1}], image_url: 'https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=500&auto=format&fit=crop' },
-              { brand: 'Honda', model: 'Livo', variant: 'Standard', cc: 110, color: 'Black', ex_showroom_price: 79000, on_road_price: 93000, max_discount: 3000, stock: 1, stock_by_color: [{"color":"Black","qty":1}], image_url: 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=500&auto=format&fit=crop' },
-              { brand: 'Honda', model: 'Activa 125', variant: 'Standard', cc: 125, color: 'Black', ex_showroom_price: 82000, on_road_price: 97000, max_discount: 3000, stock: 1, stock_by_color: [{"color":"Black","qty":1}], image_url: 'https://images.unsplash.com/photo-1599819811279-d5ad9cccf838?w=500&auto=format&fit=crop' },
-              { brand: 'Honda', model: 'Activa 110', variant: 'Standard', cc: 110, color: 'Black', ex_showroom_price: 77000, on_road_price: 91000, max_discount: 2500, stock: 4, stock_by_color: [{"color":"Black","qty":1},{"color":"Blue","qty":1},{"color":"White","qty":2}], image_url: 'https://images.unsplash.com/photo-1599819811279-d5ad9cccf838?w=500&auto=format&fit=crop' },
-              { brand: 'TVS', model: 'Star Sport', variant: 'Standard', cc: 110, color: 'Black Red', ex_showroom_price: 65000, on_road_price: 79000, max_discount: 2000, stock: 1, stock_by_color: [{"color":"Black Red","qty":1}], image_url: 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=500&auto=format&fit=crop' },
-              { brand: 'TVS', model: 'Raider 125', variant: 'Disc', cc: 125, color: 'Red', ex_showroom_price: 95000, on_road_price: 110000, max_discount: 3000, stock: 1, stock_by_color: [{"color":"Red","qty":1}], image_url: 'https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=500&auto=format&fit=crop' },
-              { brand: 'TVS', model: 'Radeon', variant: 'Standard', cc: 110, color: 'Black', ex_showroom_price: 75000, on_road_price: 89000, max_discount: 2000, stock: 2, stock_by_color: [{"color":"Black","qty":1},{"color":"Green","qty":1}], image_url: 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=500&auto=format&fit=crop' }
-            ];
-            supabase.from('inventory').insert(seeds).select().then(({ data, error }) => {
-              if (error) console.error("Seeding error:", error);
-              if (data) setInventory(current => {
-                const uniqueData = data.filter(d => !current.some(c => c.id === d.id));
-                return [...current, ...uniqueData];
-              });
-            });
-          }
         }
         if (tdInv) setTestDriveInventory(tdInv);
         if (shInv) {
