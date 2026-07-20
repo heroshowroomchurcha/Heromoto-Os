@@ -529,6 +529,11 @@ function InventoryManagementWorkspace({ inventory, onChange, onToast }) {
   const [editingStockByColor, setEditingStockByColor] = useState([]);
   const [busy, setBusy] = useState(false);
 
+  function openAdd() {
+    setEditing({ model: '', variant: '', cc: '', color: '', ex_showroom_price: '', on_road_price: '', max_discount: '', stock: 1, file: null });
+    setEditingStockByColor([]);
+  }
+
   function openEdit(vehicle) {
     setEditing({ ...vehicle, file: null });
     setEditingStockByColor(vehicle.stock_by_color || []);
@@ -557,32 +562,57 @@ function InventoryManagementWorkspace({ inventory, onChange, onToast }) {
       ? editingStockByColor.reduce((sum, item) => sum + Number(item.qty || 0), 0)
       : Number(editing.stock || 0);
     const payload = { 
+      model: editing.model.trim(),
+      variant: editing.variant ? editing.variant.trim() : '',
+      cc: Number(editing.cc || 0),
+      color: editing.color ? editing.color.trim() : '',
       ex_showroom_price: Number(editing.ex_showroom_price), 
       on_road_price: Number(editing.on_road_price),
+      max_discount: Number(editing.max_discount || 0),
       stock: totalStock,
       stock_by_color: editingStockByColor,
-      status: totalStock > 0 ? 'Available' : 'Unavailable'
+      status: totalStock > 0 ? 'Available' : 'Sold out'
     };
     
-    if (editing.file) {
-      try {
-        payload.image_url = await uploadVehicleImage(editing.file, editing.id);
-      } catch (err) {
-        onToast?.('Image upload failed: ' + err.message);
+    if (editing.id) {
+      if (editing.file) {
+        try {
+          payload.image_url = await uploadVehicleImage(editing.file, editing.id);
+        } catch (err) {
+          onToast?.('Image upload failed: ' + err.message);
+          setBusy(false);
+          return;
+        }
+      }
+      const { data, error } = await supabase.from('inventory').update(payload).eq('id', editing.id).select().single();
+      if (error) {
+        onToast?.('Failed to update: ' + error.message);
         setBusy(false);
         return;
       }
+      onChange(inventory.map(v => v.id === editing.id ? data : v));
+      onToast?.(`Updated ${editing.model} successfully.`);
+    } else {
+      const { data, error } = await supabase.from('inventory').insert(payload).select().single();
+      if (error) {
+        onToast?.('Failed to add model: ' + error.message);
+        setBusy(false);
+        return;
+      }
+      let inserted = data;
+      if (editing.file) {
+        try {
+          const image_url = await uploadVehicleImage(editing.file, inserted.id);
+          const { data: updated, error: imgErr } = await supabase.from('inventory').update({ image_url }).eq('id', inserted.id).select().single();
+          if (!imgErr && updated) inserted = updated;
+        } catch (err) {
+          onToast?.('Model added, but image upload failed: ' + err.message);
+        }
+      }
+      onChange([inserted, ...inventory]);
+      onToast?.(`Added new model ${inserted.model} successfully.`);
     }
     
-    const { data, error } = await supabase.from('inventory').update(payload).eq('id', editing.id).select().single();
-    if (error) {
-      onToast?.('Failed to update: ' + error.message);
-      setBusy(false);
-      return;
-    }
-    
-    onChange(inventory.map(v => v.id === editing.id ? data : v));
-    onToast?.(`Updated ${editing.model} successfully.`);
     setEditing(null);
     setBusy(false);
   }
@@ -594,8 +624,9 @@ function InventoryManagementWorkspace({ inventory, onChange, onToast }) {
         <h2>Inventory Management</h2>
         <p>Update stock, pricing, and bike photos for the showroom catalog.</p>
       </div>
-      <div className="workspace-tabs-group">
+      <div className="workspace-tabs-group" style={{display: 'flex', alignItems: 'center', gap: '16px'}}>
         <span className="inventory-count">{inventory.length} models</span>
+        <button className="primary-button" style={{height: '34px', padding: '0 16px', margin: 0}} onClick={openAdd}><Icon name="plus" size={15}/> Add New Model</button>
       </div>
     </div>
     <div className="panel sales-records">
@@ -626,24 +657,28 @@ function InventoryManagementWorkspace({ inventory, onChange, onToast }) {
       </div>)}
     </div>
     {editing && <div className="modal-backdrop" onClick={() => setEditing(null)}>
-      <div className="modal sale-modal" style={{maxWidth: '500px'}} onClick={e => e.stopPropagation()}>
+      <div className="modal sale-modal" style={{maxWidth: '550px'}} onClick={e => e.stopPropagation()}>
         <div className="modal-head">
-          <h2>Edit {editing.model}</h2>
+          <h2>{editing.id ? `Edit ${editing.model}` : 'Add New Bike Model'}</h2>
           <button className="icon-button" onClick={() => setEditing(null)}><Icon name="x" size={20}/></button>
         </div>
-        <form className="modal-body form-grid" style={{gridTemplateColumns: '1fr', gap: '16px'}} onSubmit={save}>
-          <div style={{display: 'flex', gap: '16px'}}>
-            <label style={{flex: 1}}>Ex-showroom Price (₹)<input type="number" required value={editing.ex_showroom_price} onChange={e => setEditing({...editing, ex_showroom_price: e.target.value})}/></label>
-            <label style={{flex: 1}}>On-road Price (₹)<input type="number" required value={editing.on_road_price} onChange={e => setEditing({...editing, on_road_price: e.target.value})}/></label>
-          </div>
-          <div>
+        <form className="modal-body form-grid" style={{gridTemplateColumns: '1fr 1fr', gap: '16px'}} onSubmit={save}>
+          <label>Model Name *<input required value={editing.model || ''} onChange={e => setEditing({...editing, model: e.target.value})} placeholder="e.g. Splendor+ i3S"/></label>
+          <label>Variant<input value={editing.variant || ''} onChange={e => setEditing({...editing, variant: e.target.value})} placeholder="e.g. Self Start Drum"/></label>
+          <label>Engine cc<input type="number" min="0" value={editing.cc || ''} onChange={e => setEditing({...editing, cc: e.target.value})} placeholder="e.g. 100"/></label>
+          <label>Base Colour<input value={editing.color || ''} onChange={e => setEditing({...editing, color: e.target.value})} placeholder="e.g. Black with Purple"/></label>
+          <label>Ex-showroom Price (₹) *<input type="number" required value={editing.ex_showroom_price || ''} onChange={e => setEditing({...editing, ex_showroom_price: e.target.value})} placeholder="e.g. 75000"/></label>
+          <label>On-road Price (₹) *<input type="number" required value={editing.on_road_price || ''} onChange={e => setEditing({...editing, on_road_price: e.target.value})} placeholder="e.g. 88000"/></label>
+          <label style={{gridColumn: 'span 2'}}>Max Discount (₹)<input type="number" min="0" value={editing.max_discount || ''} onChange={e => setEditing({...editing, max_discount: e.target.value})} placeholder="e.g. 3000"/></label>
+          
+          <div style={{gridColumn: 'span 2'}}>
             {editingStockByColor.length === 0 ? (
               <label>Total Stock Qty<input type="number" min="0" required value={editing.stock || 0} onChange={e => setEditing({...editing, stock: Number(e.target.value)})}/></label>
             ) : (
               <label>Total Stock Qty (Calculated from colors)<input type="number" disabled value={editingStockByColor.reduce((sum, item) => sum + Number(item.qty || 0), 0)}/></label>
             )}
           </div>
-          <div>
+          <div style={{gridColumn: 'span 2'}}>
             <label>Color-wise Stock</label>
             <div style={{display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px', padding: '12px', background: '#f8f9fa', borderRadius: '8px'}}>
               {editingStockByColor.map((item, idx) => (
@@ -667,12 +702,12 @@ function InventoryManagementWorkspace({ inventory, onChange, onToast }) {
             </div>
             <small className="hint">Total stock is calculated automatically.</small>
           </div>
-          <div>
-            <label>Upload Photo<input type="file" accept="image/*" onChange={e => setEditing({...editing, file: e.target.files[0]})}/><small className="hint">Overrides the current bike photo.</small></label>
+          <div style={{gridColumn: 'span 2'}}>
+            <label>Upload Photo<input type="file" accept="image/*" onChange={e => setEditing({...editing, file: e.target.files[0]})}/><small className="hint">Overrides or sets the bike photo.</small></label>
           </div>
-          <div className="modal-foot" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+          <div className="modal-foot" style={{ gridColumn: 'span 2', display: 'flex', gap: '10px', marginTop: '20px' }}>
             <button type="button" className="ghost-button" onClick={() => setEditing(null)} style={{ flex: 1 }}>Cancel</button>
-            <button type="submit" disabled={busy} className="primary-button" style={{ flex: 1 }}>{busy ? 'Saving...' : 'Save Changes'}</button>
+            <button type="submit" disabled={busy} className="primary-button" style={{ flex: 1 }}>{busy ? 'Saving...' : 'Save Model'}</button>
           </div>
         </form>
       </div>
